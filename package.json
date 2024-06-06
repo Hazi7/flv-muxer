@@ -1,0 +1,23 @@
+{
+  "name": "webcaster",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "type": "module",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "vite": "^5.2.12",
+    "vite-plugin-checker": "^0.6.4"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.7.5",
+    "typescript": "^5.4.5",
+    "webm-muxer": "^4.0.1"
+  }
+}
