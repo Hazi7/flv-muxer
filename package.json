@@ -16,6 +16,7 @@
     "vite-plugin-checker": "^0.6.4"
   },
   "dependencies": {
+    "interactjs": "^1.10.27",
     "socket.io-client": "^4.7.5",
     "typescript": "^5.4.5",
     "webm-muxer": "^4.0.1"
