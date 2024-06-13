@@ -1,4 +1,5 @@
-import { FlvMuxer } from "./core/flv-muxer";
+import { FlvMuxer } from "./core/flv_muxer";
+import { test } from "./core/muxer";
 
 const metadata = {
     duration: 120.5,
@@ -12,7 +13,9 @@ const metadata = {
 };
 
 export function init() {
-    new FlvMuxer().createFlvFile();
+    
 }
 
 init();
+
+test();
