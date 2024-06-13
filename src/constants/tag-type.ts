@@ -1,5 +1,6 @@
-export const enum TagEnum {
-    audio = 0x08,
-    video = 0x09,
-    metadata = 0x12
+export enum TagEnum {
+    Audio = 0x08,
+    Video = 0x09,
+    Metadata = 0x12,
+    HeaderSize = 11
 }
