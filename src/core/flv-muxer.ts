@@ -1,5 +1,4 @@
-import { AmfEnum } from "../constants/amf-type";
-import { TagEnum } from "../constants/tag-type";
+import { AmfEnum, AvcPacketTypeEnum, CodecIdEnum, FrameTypeEnum, TagEnum } from "../constants/enums";
 
 const metadata = {
     duration: 20,
@@ -8,17 +7,18 @@ const metadata = {
     videodatarate: 500,
     framerate: 30,
     videocodecid: 7,
+    stereo: true
 };
 
 export class FlvMuxer {
     textEncoder: TextEncoder = new TextEncoder();
     flvBuffer: Uint8Array | undefined;
+    metadata: { [key: string] : any} | undefined;
     get offset() {
         return this.flvBuffer?.length || 0;
     }
 
     constructor() {
-
         this.flvBuffer = new Uint8Array([
             ...this.createFlvHeader(),
             ...this.createMetadataTag(metadata),
@@ -26,11 +26,10 @@ export class FlvMuxer {
 
         setTimeout(() => {
             this.createFlvFile();
-        }, 3000);
+        }, 5000);
     }
 
     createFlvFile() {
-        
         const flvBlob = new Blob([this.flvBuffer], { type: "video/x-flv" });
 
         const url = URL.createObjectURL(flvBlob);
@@ -55,15 +54,34 @@ export class FlvMuxer {
      * @param {boolean} hasVideo 是否包含视频流，默认包含
      * @returns {ArrayBuffer} 返回构造好的FLV头信息的ArrayBuffer
      */
-    createFlvHeader(version: number = 1, hasAudio: boolean = false, hasVideo: boolean = true): Uint8Array {
-        const streamTypeFlag = hasAudio && hasVideo ? 0x05 : hasVideo ? 0x01 : hasAudio ? 0x04 : 0x00;
+    createFlvHeader(
+        version: number = 1,
+        hasAudio: boolean = false,
+        hasVideo: boolean = true
+    ): Uint8Array {
+        const streamTypeFlag =
+            hasAudio && hasVideo
+                ? 0x05
+                : hasVideo
+                  ? 0x01
+                  : hasAudio
+                    ? 0x04
+                    : 0x00;
 
         const headerBuffer = new Uint8Array([
-            0x46 ,0x4c, 0x56, // FLV标识
+            0x46,
+            0x4c,
+            0x56, // FLV标识
             version, // 版本号
             streamTypeFlag, // 音频视频标志
-            0x00, 0x00, 0x00, 0x09, // 头部大小
-            0x00, 0x00, 0x00, 0x00, // 前一个标签的大小，这里默认为0
+            0x00,
+            0x00,
+            0x00,
+            0x09, // 头部大小
+            0x00,
+            0x00,
+            0x00,
+            0x00, // 前一个标签的大小，这里默认为0
         ]);
 
         return headerBuffer;
@@ -75,7 +93,12 @@ export class FlvMuxer {
      * @param {number} timestamp 时间戳
      * @param {number} streamId 流媒体ID
      */
-    createTagHeader(tagType: keyof typeof TagEnum, bodySize: number, timestamp: number,streamId: number = 0): Uint8Array {
+    createTagHeader(
+        tagType: keyof typeof TagEnum,
+        bodySize: number,
+        timestamp: number,
+        streamId: number = 0
+    ): Uint8Array {
         const tagHeaderBuffer = new Uint8Array(TagEnum.HeaderSize);
         const tagHeaderBufferView = new DataView(tagHeaderBuffer.buffer);
 
@@ -110,12 +133,15 @@ export class FlvMuxer {
         const bodySize = stringAmfBuffer.byteLength + arrayAmfBuffer.byteLength; // 设置body size
         const preTagSize = bodySize + TagEnum.HeaderSize; // 设置 pre size
 
-        const headerBuffer = this.createTagHeader('Metadata', bodySize, 0, 0); // 创建header tag
+        const headerBuffer = this.createTagHeader("Metadata", bodySize, 0, 0); // 创建header tag
         const tagBuffer = new Uint8Array(preTagSize + 4); // 创建metadata的缓冲区
 
         tagBuffer.set(headerBuffer); // 设置头
         tagBuffer.set(stringAmfBuffer, TagEnum.HeaderSize);
-        tagBuffer.set(arrayAmfBuffer, stringAmfBuffer.byteLength + TagEnum.HeaderSize);
+        tagBuffer.set(
+            arrayAmfBuffer,
+            stringAmfBuffer.byteLength + TagEnum.HeaderSize
+        );
 
         const tagBufferView = new DataView(tagBuffer.buffer);
         tagBufferView.setUint32(preTagSize, preTagSize); // 设置pre size
@@ -123,6 +149,9 @@ export class FlvMuxer {
         return tagBuffer;
     }
 
+    /**
+     * @param {string} text 要写入的字符串
+     */
     createStringAMF(text: string = "onMetaData") {
         let prefixSize = 3; // AMF类型（1byte）+ text长度（2byte）
         let amfBuffer = new Uint8Array(prefixSize + text.length);
@@ -137,8 +166,12 @@ export class FlvMuxer {
         return amfBuffer;
     }
 
+    /**
+     * @param {Object} metadata 要写入的元数据对象
+     */
     createArrayAMF(metadata: { [key: string]: number }) {
-        let totalSize = 5, offset = 0;
+        let totalSize = 5,
+            offset = 0;
 
         for (const key in metadata) {
             if (Object.prototype.hasOwnProperty.call(metadata, key)) {
@@ -155,7 +188,6 @@ export class FlvMuxer {
         offset += 4;
 
         for (const key in metadata) {
-
             if (Object.prototype.hasOwnProperty.call(metadata, key)) {
                 amfBufferView.setUint16(offset, key.length); // 设置key的长度
                 offset += 2;
@@ -163,118 +195,102 @@ export class FlvMuxer {
                 this.textEncoder.encodeInto(key, amfBuffer.subarray(offset));
                 offset += key.length;
 
-                amfBufferView.setUint8(offset++, 0x00);
-                amfBufferView.setFloat64(offset, metadata[key]); // 设置value值
-                offset += 8;
+                if (typeof metadata[key] === "number") {
+                    amfBufferView.setUint8(offset++, AmfEnum.Number);
+                    amfBufferView.setFloat64(offset, metadata[key]); // 设置value值
+                    offset += 8;
+                } else if (typeof metadata[key] === "boolean") {
+                    amfBufferView.setUint8(offset++, AmfEnum.Boolean);
+                    amfBufferView.setUint8(
+                        offset++,
+                        metadata[key] ? 0x01 : 0x00
+                    );
+                }
             }
         }
 
         return amfBuffer;
     }
 
+    createVideoTag(chunk: EncodedVideoChunk, metadata: any) {
 
-    writeVideoTagBody(chunk: EncodedVideoChunk, metadata: any) {
+        let sequenceBuffer;
 
-        const isKeyFrame = chunk.type == "key";
-        const frameByte = isKeyFrame ? 0x10 : 0x20;
-        const codecId = 0x07;
+        if (metadata.decoderConfig) {
+            const videoBodyBuffer = this.createVideoBody('KeyFrame', 'AVC', 'SequenceHeader', 0, metadata.decoderConfig.description);
+            const videoHeaderBuffer = this.createTagHeader("Video", videoBodyBuffer.byteLength, chunk.timestamp / 1000);
+            sequenceBuffer = new Uint8Array(videoHeaderBuffer.byteLength + videoBodyBuffer.byteLength + 4);
 
-        let buffer = new Uint8Array(5);
+            sequenceBuffer.set(videoHeaderBuffer);
+            sequenceBuffer.set(videoBodyBuffer, videoHeaderBuffer.byteLength);
+            
+            const sequenceBufferView = new DataView(sequenceBuffer.buffer);
+            const preTagSize = videoHeaderBuffer.byteLength + videoBodyBuffer.byteLength; // tag的大小
 
-        let videoTagBuffer;
-        
-        let offset = 0;
+            sequenceBufferView.setUint32(preTagSize, preTagSize);
+        }
 
-        buffer[offset++] = frameByte | codecId; // 标识为是否是关键帧及编码类型
-        buffer[offset++] = 0x01; // 0x00标识为AVC序列头, 0x01标识为AVC视频流中的基本数据单元
+        const frameType = chunk.type === "key" ? 'KeyFrame' : 'InterFrame';
 
-        const compositionTime = 0;
-        buffer[offset++] = (compositionTime >> 16) & 0xff;
-        buffer[offset++] = (compositionTime >> 8) & 0xff;
-        buffer[offset++] = compositionTime & 0xff;
-
-        videoTagBuffer = this.writeNalUnit(chunk);
-
-        const result = new Uint8Array([
-            ...buffer,
-            ...videoTagBuffer
-        ]);
-
-        return result;
-    }
-
-    writeAvcConfiguration(description: ArrayBuffer) {
-
-        const avcConfiguration = new Uint8Array(description.byteLength + 5);
-        let offset = 0;
-
-        avcConfiguration[offset++] = 0x10 | 0x07; // 标识为是否是关键帧及编码类型
-        avcConfiguration[offset++] = 0x00; // 0x00标识为AVC序列头, 0x01标识为AVC视频流中的基本数据单元
-
-        const compositionTime = 0;
-        avcConfiguration[offset++] = (compositionTime >> 16) & 0xff;
-        avcConfiguration[offset++] = (compositionTime >> 8) & 0xff;
-        avcConfiguration[offset++] = compositionTime & 0xff;
-
-        avcConfiguration.set(new Uint8Array(description), 5);
-
-        const videoTagHeaderBuffer = this.createTagHeader('Video', avcConfiguration.byteLength, 0);
-
-        const preTagSize = avcConfiguration.byteLength + videoTagHeaderBuffer.byteLength;
-
-        const preTagSizeByte3 = (preTagSize >> 24) & 0xff;
-        const preTagSizeByte2 = (preTagSize >> 16) & 0xff;
-        const preTagSizeByte1 = (preTagSize >> 8) & 0xff;
-        const preTagSizeByte0 = preTagSize & 0xff;
-
-        
-        const videoData = new Uint8Array([
-            ...videoTagHeaderBuffer,
-            ...avcConfiguration,
-            preTagSizeByte3, preTagSizeByte2, preTagSizeByte1, preTagSizeByte0
-        ]);
-
-        return videoData;
-
-    }
-    writeNalUnit(chunk: EncodedVideoChunk) {
-
-        
         const dataBuffer = new Uint8Array(chunk.byteLength);
-        chunk.copyTo(dataBuffer.buffer);
+        chunk.copyTo(dataBuffer);
 
-        return dataBuffer;
+        const videoBodyBuffer = this.createVideoBody(frameType, 'AVC', 'NALU', 0, dataBuffer)
+        const videoHeaderBuffer = this.createTagHeader("Video", videoBodyBuffer.byteLength, chunk.timestamp / 1000);
+
+        const videoTagSize = videoHeaderBuffer.byteLength + videoBodyBuffer.byteLength + 4;
+        const tagSize = sequenceBuffer ? sequenceBuffer.byteLength + videoTagSize : videoTagSize;
+
+        const videoTagBuffer = new Uint8Array(tagSize);
+
+        let offset = 0;
+        if (sequenceBuffer) {
+            videoTagBuffer.set(sequenceBuffer, offset);
+            offset += sequenceBuffer.byteLength;
+        }
+
+        videoTagBuffer.set(videoHeaderBuffer, offset);
+        offset += videoHeaderBuffer.byteLength;
+        videoTagBuffer.set(videoBodyBuffer, offset);
+        offset += videoBodyBuffer.byteLength;
+
+        const videoTagBufferView = new DataView(videoTagBuffer.buffer);
+        videoTagBufferView.setUint32(tagSize - 4, videoHeaderBuffer.byteLength + videoBodyBuffer.byteLength);
+
+        console.log(videoBodyBuffer);
+
+        return videoTagBuffer;
     }
 
-    writeVideoTag(chunk: EncodedVideoChunk, metadata: any) {
+    createVideoBody(
+        frameType: keyof typeof FrameTypeEnum,
+        codecId: keyof typeof CodecIdEnum,
+        avcPacketType: keyof typeof AvcPacketTypeEnum,
+        compositionTime: number = 0,
+        data: ArrayBuffer
+    ) {
+
+        const videoBodyBuffer = new Uint8Array(5 + data.byteLength);
+        const videoBodyBufferView = new DataView(videoBodyBuffer.buffer);
+
+        let offset = 0;
+
+        videoBodyBufferView.setUint8(offset++, FrameTypeEnum[frameType] | CodecIdEnum[codecId]); // 设置帧类型和编码器ID
+        videoBodyBufferView.setUint8(offset++, AvcPacketTypeEnum[avcPacketType]); // 设置avc类型
+
+        // 设置偏移时间
+        videoBodyBufferView.setUint8(offset++, (compositionTime >> 16) & 0xff);
+        videoBodyBufferView.setUint8(offset++, (compositionTime >> 8) & 0xff);
+        videoBodyBufferView.setUint8(offset++, compositionTime & 0xff);
+
         
-        const videoTagBodyBuffer = this.writeVideoTagBody(chunk, metadata);
-        const videoTagHeaderBuffer = this.createTagHeader('Video', videoTagBodyBuffer.byteLength, chunk.timestamp / 1000);
+        videoBodyBuffer.set(new Uint8Array(data), offset); // 设置NALUint数据包
 
-        const preTagSize = videoTagBodyBuffer.byteLength + videoTagHeaderBuffer.byteLength;
-
-        const preTagSizeByte3 = (preTagSize >> 24) & 0xff;
-        const preTagSizeByte2 = (preTagSize >> 16) & 0xff;
-        const preTagSizeByte1 = (preTagSize >> 8) & 0xff;
-        const preTagSizeByte0 = preTagSize & 0xff;
-
-        const videoData = new Uint8Array([
-            ...videoTagHeaderBuffer,
-            ...videoTagBodyBuffer,
-            preTagSizeByte3, preTagSizeByte2, preTagSizeByte1, preTagSizeByte0
-        ]);
-
-        return videoData;
+        return videoBodyBuffer;
     }
 
     addVideoTrack(chunk: EncodedVideoChunk, metadata: Object) {
-    
-        if (chunk.type == 'key') {
-            const avvc = this.writeAvcConfiguration(metadata.decoderConfig.description)
-            this.writeToBuffer(avvc);
-        }
-        
-        const videoTagBuffer = this.writeVideoTag(chunk, metadata);
+        const videoTagBuffer = this.createVideoTag(chunk, metadata);
 
         this.writeToBuffer(videoTagBuffer);
     }
@@ -283,12 +299,8 @@ export class FlvMuxer {
         const oldBuffer = this.flvBuffer;
         if (oldBuffer) {
             const newBuffer = new Uint8Array(oldBuffer.length + newData.length);
-            newBuffer.set([
-                ...oldBuffer,
-                ...newData
-            ]);
+            newBuffer.set([...oldBuffer, ...newData]);
             this.flvBuffer = newBuffer;
         }
     }
-
 }

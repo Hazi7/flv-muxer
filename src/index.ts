@@ -1,4 +1,4 @@
-import { FlvMuxer } from "./core/flv_muxer";
+import { FlvMuxer } from "./core/flv-muxer";
 import { test } from "./core/muxer";
 
 const metadata = {

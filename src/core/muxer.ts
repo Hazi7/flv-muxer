@@ -1,4 +1,4 @@
-import { FlvMuxer } from "./flv_muxer";
+import { FlvMuxer } from "./flv-muxer";
 
 export function init() {}
 
