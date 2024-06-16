@@ -1,50 +1,60 @@
 import { AmfEnum, AvcPacketTypeEnum, CodecIdEnum, FrameTypeEnum, TagEnum } from "../constants/enums";
-
-const metadata = {
-    duration: 20,
-    width: 1920,
-    height: 1080,
-    videodatarate: 500,
-    framerate: 30,
-    videocodecid: 7,
-    stereo: true
-};
+import type { AudioMetadata, EncoderMetadata, VideoMetadata } from "../interfaces/metadata";
 
 export class FlvMuxer {
     textEncoder: TextEncoder = new TextEncoder();
     flvBuffer: Uint8Array | undefined;
-    metadata: { [key: string] : any} | undefined;
-    get offset() {
-        return this.flvBuffer?.length || 0;
+    onMetadata: ((metadata: EncoderMetadata) => void) | undefined;
+    private _videoMetadata: VideoMetadata | undefined;
+    private _audioMetadata: AudioMetadata | undefined;
+    private _metadata!: EncoderMetadata;
+    get videoMetadata(): VideoMetadata {
+        if (!this._videoMetadata) {
+            throw new Error("Video encoder error");
+        }
+        return this._videoMetadata;
+    }
+    set videoMetadata(value: any) {
+        this._videoMetadata = value;
+
+        if (this.audioMetadata) {
+            this.metadata = {
+                ...this.videoMetadata,
+                ...this.audioMetadata
+            }
+        }
+    }
+    get audioMetadata(): AudioMetadata {
+        if (!this._audioMetadata) {
+            throw new Error("Audio encoder error");
+        }
+        return this._audioMetadata;
+    }
+    set audioMetadata(value: any) {
+        this._audioMetadata = value;
+
+        if (this.videoMetadata) {
+            this.metadata = {
+                ...this.videoMetadata,
+                ...this.audioMetadata
+            }
+        }
+    }
+    get metadata(): EncoderMetadata {
+        return this._metadata;
+    }
+    set metadata(value: any) {
+        this._metadata = value;
+
+        this.onMetadata && this.onMetadata(this.metadata);
     }
 
     constructor() {
-        this.flvBuffer = new Uint8Array([
-            ...this.createFlvHeader(),
-            ...this.createMetadataTag(metadata),
-        ]);
 
-        setTimeout(() => {
-            this.createFlvFile();
-        }, 5000);
     }
 
     createFlvFile() {
-        const flvBlob = new Blob([this.flvBuffer], { type: "video/x-flv" });
 
-        const url = URL.createObjectURL(flvBlob);
-        const a = document.createElement("a");
-        a.style.display = "none";
-        a.href = url;
-        a.download = "flvVideo.flv";
-
-        // 将链接添加到 DOM 中并点击触发下载，然后移除
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url); // 释放 URL 对象
-        }, 100);
     }
 
     /**
@@ -59,29 +69,14 @@ export class FlvMuxer {
         hasAudio: boolean = false,
         hasVideo: boolean = true
     ): Uint8Array {
-        const streamTypeFlag =
-            hasAudio && hasVideo
-                ? 0x05
-                : hasVideo
-                  ? 0x01
-                  : hasAudio
-                    ? 0x04
-                    : 0x00;
+        const streamTypeFlag = hasAudio && hasVideo ? 0x05 : hasVideo ? 0x01 : hasAudio ? 0x04 : 0x00;
 
         const headerBuffer = new Uint8Array([
-            0x46,
-            0x4c,
-            0x56, // FLV标识
+            0x46, 0x4c, 0x56, // FLV标识
             version, // 版本号
             streamTypeFlag, // 音频视频标志
-            0x00,
-            0x00,
-            0x00,
-            0x09, // 头部大小
-            0x00,
-            0x00,
-            0x00,
-            0x00, // 前一个标签的大小，这里默认为0
+            0x00, 0x00, 0x00, 0x09, // 头部大小
+            0x00, 0x00, 0x00, 0x00, // 前一个标签的大小，这里默认为0
         ]);
 
         return headerBuffer;
@@ -216,7 +211,23 @@ export class FlvMuxer {
 
         let sequenceBuffer;
 
+        // 如果是关键帧，则写入sps和pps
         if (metadata.decoderConfig) {
+
+            const { codedWidth, codedHeight, codec } = metadata.decoderConfig;
+
+            const videoMetadata: VideoMetadata = {
+                width: codedWidth,
+                height: codedHeight,
+                videocodeid: 0
+            }
+            
+            if (codec.includes('avc1')) {
+                videoMetadata.videocodeid = CodecIdEnum.AVC;
+            }
+
+            this.videoMetadata = videoMetadata;
+
             const videoBodyBuffer = this.createVideoBody('KeyFrame', 'AVC', 'SequenceHeader', 0, metadata.decoderConfig.description);
             const videoHeaderBuffer = this.createTagHeader("Video", videoBodyBuffer.byteLength, chunk.timestamp / 1000);
             sequenceBuffer = new Uint8Array(videoHeaderBuffer.byteLength + videoBodyBuffer.byteLength + 4);
@@ -230,34 +241,37 @@ export class FlvMuxer {
             sequenceBufferView.setUint32(preTagSize, preTagSize);
         }
 
-        const frameType = chunk.type === "key" ? 'KeyFrame' : 'InterFrame';
+        const frameType = chunk.type === "key" ? 'KeyFrame' : 'InterFrame'; // 判断是不是关键帧
 
+        // 将EncoderVideoChunk中的数据写入到Uint8Array中
         const dataBuffer = new Uint8Array(chunk.byteLength);
         chunk.copyTo(dataBuffer);
 
+        // 创建video tag缓冲区
         const videoBodyBuffer = this.createVideoBody(frameType, 'AVC', 'NALU', 0, dataBuffer)
         const videoHeaderBuffer = this.createTagHeader("Video", videoBodyBuffer.byteLength, chunk.timestamp / 1000);
 
         const videoTagSize = videoHeaderBuffer.byteLength + videoBodyBuffer.byteLength + 4;
-        const tagSize = sequenceBuffer ? sequenceBuffer.byteLength + videoTagSize : videoTagSize;
+        const tagSize = sequenceBuffer ? sequenceBuffer.byteLength + videoTagSize : videoTagSize; // 整个tag的大小
 
         const videoTagBuffer = new Uint8Array(tagSize);
 
         let offset = 0;
-        if (sequenceBuffer) {
+        if (sequenceBuffer) { // 如果是关键帧，则先写入sps和pps
             videoTagBuffer.set(sequenceBuffer, offset);
             offset += sequenceBuffer.byteLength;
         }
-
+        
+        // 设置video tag的header
         videoTagBuffer.set(videoHeaderBuffer, offset);
         offset += videoHeaderBuffer.byteLength;
+        // 设置video tag的body
         videoTagBuffer.set(videoBodyBuffer, offset);
         offset += videoBodyBuffer.byteLength;
 
+        // 设置pre size
         const videoTagBufferView = new DataView(videoTagBuffer.buffer);
         videoTagBufferView.setUint32(tagSize - 4, videoHeaderBuffer.byteLength + videoBodyBuffer.byteLength);
-
-        console.log(videoBodyBuffer);
 
         return videoTagBuffer;
     }
@@ -287,6 +301,14 @@ export class FlvMuxer {
         videoBodyBuffer.set(new Uint8Array(data), offset); // 设置NALUint数据包
 
         return videoBodyBuffer;
+    }
+
+    createAudioTag(data: ArrayBuffer, metadata: Object) {
+        
+    }
+
+    createAudioBody(data: ArrayBuffer, metadata: Object) {
+        
     }
 
     addVideoTrack(chunk: EncodedVideoChunk, metadata: Object) {
