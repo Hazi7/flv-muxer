@@ -14,4 +14,6 @@ export interface AudioMetadata {
 }
 
 
-export interface EncoderMetadata extends VideoMetadata, AudioMetadata {}
+export interface EncoderMetadata extends VideoMetadata, AudioMetadata {
+    [key: string]: any
+}

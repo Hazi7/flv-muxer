@@ -5,6 +5,7 @@ export class FlvMuxer {
     textEncoder: TextEncoder = new TextEncoder();
     flvBuffer: Uint8Array | undefined;
     onMetadata: ((metadata: EncoderMetadata) => void) | undefined;
+    onMediaData: ((data: Uint8Array) => void) | undefined;
     private _videoMetadata: VideoMetadata | undefined;
     private _audioMetadata: AudioMetadata | undefined;
     private _metadata!: EncoderMetadata;
@@ -17,11 +18,8 @@ export class FlvMuxer {
     set videoMetadata(value: any) {
         this._videoMetadata = value;
 
-        if (this.audioMetadata) {
-            this.metadata = {
-                ...this.videoMetadata,
-                ...this.audioMetadata
-            }
+        this.metadata = {
+            ...this.videoMetadata,
         }
     }
     get audioMetadata(): AudioMetadata {
@@ -33,11 +31,8 @@ export class FlvMuxer {
     set audioMetadata(value: any) {
         this._audioMetadata = value;
 
-        if (this.videoMetadata) {
-            this.metadata = {
-                ...this.videoMetadata,
-                ...this.audioMetadata
-            }
+        this.metadata = {
+            ...this.audioMetadata
         }
     }
     get metadata(): EncoderMetadata {
@@ -46,15 +41,14 @@ export class FlvMuxer {
     set metadata(value: any) {
         this._metadata = value;
 
-        this.onMetadata && this.onMetadata(this.metadata);
+        this.onMetadata && this.onMetadata(this.metadata); // 触发onMetadata回调
+
+        this.onMediaData && this.onMediaData(this.createFlvHeader());
+        this.onMediaData && this.onMediaData(this.createMetadataTag(this.metadata));
     }
 
     constructor() {
-
-    }
-
-    createFlvFile() {
-
+        
     }
 
     /**
@@ -121,7 +115,7 @@ export class FlvMuxer {
         return tagHeaderBuffer;
     }
 
-    createMetadataTag(metadata: { [key: string]: number }): Uint8Array {
+    createMetadataTag(metadata: EncoderMetadata): Uint8Array {
         const stringAmfBuffer = this.createStringAMF(); // 创建第一个AMF包
         const arrayAmfBuffer = this.createArrayAMF(metadata); // 创建第二个AMF包
 
@@ -164,7 +158,7 @@ export class FlvMuxer {
     /**
      * @param {Object} metadata 要写入的元数据对象
      */
-    createArrayAMF(metadata: { [key: string]: number }) {
+    createArrayAMF(metadata: EncoderMetadata) {
         let totalSize = 5,
             offset = 0;
 
@@ -272,6 +266,8 @@ export class FlvMuxer {
         // 设置pre size
         const videoTagBufferView = new DataView(videoTagBuffer.buffer);
         videoTagBufferView.setUint32(tagSize - 4, videoHeaderBuffer.byteLength + videoBodyBuffer.byteLength);
+
+        this.onMediaData && this.onMediaData(videoTagBuffer);
 
         return videoTagBuffer;
     }
