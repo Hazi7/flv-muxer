@@ -1,4 +1,4 @@
-import { FlvStreamer } from "../core/flv-streamer";
+import { FlvStreamer } from "../../dist/flv-muxer";
 
 let stream = null;
 let videoEncoder = null;

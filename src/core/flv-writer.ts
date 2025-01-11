@@ -1,12 +1,12 @@
-import { TagType } from "../constants/TagType";
-import { AvcPacketType, CodeId, FrameType } from "../constants/VideoType";
-import { AmfEncoder } from "./amf-encoder";
 import {
   SoundFormat,
   SoundRate,
   SoundSize,
   SoundType,
-} from "../constants/AudioType";
+} from "../constants/audio-type";
+import { TagType } from "../constants/tag-type";
+import { AvcPacketType, CodeId, FrameType } from "../constants/video-type";
+import { AmfEncoder } from "./amf-encoder";
 
 export class FlvWriter extends AmfEncoder {
   constructor() {

@@ -1,5 +1,14 @@
-import type { FlvStreamOptions } from "../interfaces/flv-option";
 import { FlvWriter } from "./flv-writer";
+
+export interface FlvStreamOptions {
+  hasAudio?: boolean;
+  hasVideo?: boolean;
+  width?: number;
+  height?: number;
+  audioCodec?: string;
+  videoCodec?: string;
+  videoFrameRate?: number;
+}
 
 /**
  * 用于将FLV数据流式传输到可写流的类。
@@ -9,6 +18,7 @@ export class FlvStreamer extends FlvWriter {
   private readonly writer: WritableStreamDefaultWriter<Uint8Array>;
   private readonly options: FlvStreamOptions;
   private readonly videoChunkHandler?: EncodedVideoChunkOutputCallback;
+  private readonly audioChunkHandler?: EncodedAudioChunkOutputCallback;
 
   private baseTimestamp: number = 0;
   private firstTimestamp: number | null = null;
@@ -40,13 +50,19 @@ export class FlvStreamer extends FlvWriter {
     if (this.options.hasVideo) {
       this.videoChunkHandler = this.handleVideoChunk.bind(this);
     }
+    if (this.options.hasAudio) {
+      this.audioChunkHandler = this.handleAudioChunk.bind(this);
+    }
   }
 
   /**
    * 通过写入FLV头和元数据来启动FLV流。
    */
   async start() {
-    const header = this.createFlvHeader(true, false);
+    const header = this.createFlvHeader(
+      this.options.hasVideo,
+      this.options.hasAudio
+    );
     await this.writer.write(header);
 
     await this.writeMetadata();
@@ -56,15 +72,29 @@ export class FlvStreamer extends FlvWriter {
    * 将元数据写入FLV流。
    */
   private async writeMetadata() {
-    const metadata = {
+    const metadata: Record<string, any> = {
       duration: 0,
-      width: this.options.width,
-      height: this.options.height,
-      videodatarate: 1000,
-      framerate: this.options.videoFrameRate,
-      videocodecid: 7,
       encoder: "FlvStreamWriter",
     };
+
+    if (this.options.hasVideo) {
+      Object.assign(metadata, {
+        width: this.options.width,
+        height: this.options.height,
+        videodatarate: 1000,
+        framerate: this.options.videoFrameRate,
+        videocodecid: 7,
+      });
+    }
+
+    if (this.options.hasAudio) {
+      Object.assign(metadata, {
+        audiocodecid: 10, // AAC
+        audiosamplerate: 44100,
+        audiosamplesize: 16,
+        stereo: true,
+      });
+    }
 
     const scriptData = this.createScriptDataTag(metadata);
     await this.writer.write(scriptData);
@@ -143,6 +173,60 @@ export class FlvStreamer extends FlvWriter {
    */
   getVideoChunkHandler() {
     return this.videoChunkHandler;
+  }
+
+  getAudioChunkHandler() {
+    return this.audioChunkHandler;
+  }
+
+  /**
+   * 处理传入的音频块并将其写入FLV流。
+   * @param chunk - 要处理的音频块。
+   * @param metadata - 与音频块关联的可选元数据。
+   */
+  async handleAudioChunk(
+    chunk: EncodedAudioChunk,
+    metadata?: EncodedAudioChunkMetadata
+  ) {
+    const data = new Uint8Array(chunk.byteLength);
+    chunk.copyTo(data);
+
+    let timestamp = this.calculateTimestamp(chunk.timestamp / 1000);
+
+    if (timestamp <= this.lastTimestamp) {
+      timestamp = this.lastTimestamp + 1;
+    }
+    this.lastTimestamp = timestamp;
+
+    if (metadata?.decoderConfig) {
+      // AAC序列头
+      const aacSequenceHeader = new Uint8Array(
+        metadata.decoderConfig.description as ArrayBuffer
+      );
+
+      const sequenceTag = this.createAudioTag(
+        "AAC",
+        "kHz44",
+        "Sound16bit",
+        "Stereo",
+        0,
+        aacSequenceHeader
+      );
+
+      await this.writer.write(sequenceTag);
+    }
+
+    // AAC原始数据
+    const audioTag = this.createAudioTag(
+      "AAC",
+      "kHz44",
+      "Sound16bit",
+      "Stereo",
+      timestamp,
+      data
+    );
+
+    await this.writer.write(audioTag);
   }
 
   /**
