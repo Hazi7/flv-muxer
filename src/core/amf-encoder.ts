@@ -135,7 +135,7 @@ export class AmfEncoder extends BinaryWriter {
     this.writeUint8(AmfType.DATE); // DATE marker
 
     this.writeFloat64(date.getTime());
-    this.writeUint16(0); // 时区，默认为0
+    this.writeInt16(0); // 时区，默认为 0
   }
 
   /**
@@ -166,10 +166,8 @@ export class AmfEncoder extends BinaryWriter {
       this.writeAmfNumber(value);
     } else if (typeof value === "string") {
       if (value.length > 65535) {
-        this.writeUint8(0x0c);
         this.writeAmfLongString(value);
       } else {
-        this.writeUint8(0x02);
         this.writeAmfString(value);
       }
     } else if (value instanceof Date) {

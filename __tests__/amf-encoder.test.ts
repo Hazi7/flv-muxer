@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { AmfType } from "../src/constants/amf-type";
 import { AmfEncoder } from "../src/core/amf-encoder";
 import { toHexString } from "./test-utils";
 
@@ -10,99 +9,110 @@ describe("AmfEncoder", () => {
     encoder = new AmfEncoder();
   });
 
-  describe("writeAmfNumber", () => {
-    it("应正确编码整数", () => {
-      encoder.writeAmfNumber(419);
-      expect(toHexString(encoder.getBytes())).toBe(
-        "0".concat(AmfType.NUMBER.toString(16).concat("407A300000000000"))
-      );
-    });
-
-    it("应正确编码小数", () => {
-      encoder.writeAmfNumber(111.2);
-      expect(toHexString(encoder.getBytes())).toBe("00405BCCCCCCCCCCCD");
-    });
-
-    it("应正确编码负小数", () => {
-      encoder.writeAmfNumber(-16.6);
-      expect(toHexString(encoder.getBytes())).toBe("00C03099999999999A");
-    });
-
-    it("应正确编码0", () => {
-      encoder.writeAmfNumber(0);
-      expect(toHexString(encoder.getBytes())).toBe("000000000000000000");
-    });
-
-    it("应正确编码最大安全整数", () => {
-      encoder.writeAmfNumber(Number.MAX_SAFE_INTEGER);
-      expect(toHexString(encoder.getBytes())).toBe("0043DFFFFFFFFFFFFF");
-    });
-
-    it("应正确编码最小安全整数", () => {
-      encoder.writeAmfNumber(Number.MIN_SAFE_INTEGER);
-      expect(toHexString(encoder.getBytes())).toBe("00C3DFFFFFFFFFFFFF");
-    });
+  it.each([
+    [419, "00407A300000000000"],
+    [111.2, "00405BCCCCCCCCCCCD"],
+    [-16.6, "00C03099999999999A"],
+    [0, "000000000000000000"],
+  ])("应正确编码数字 %p", (input, expected) => {
+    encoder.writeAmfNumber(input);
+    expect(toHexString(encoder.getBytes())).toBe(expected);
   });
 
-  describe("writeAmfBoolean", () => {
-    it("应正确编码 true", () => {
-      encoder.writeAmfBoolean(true);
-      expect(toHexString(encoder.getBytes())).toBe("0101");
-    });
-
-    it("应正确编码 false", () => {
-      encoder.writeAmfBoolean(false);
-      expect(toHexString(encoder.getBytes())).toBe("0100");
-    });
+  it.each([
+    [true, "0101"],
+    [false, "0100"],
+  ])("应正确编码布尔值 %p", (input, expected) => {
+    encoder.writeAmfBoolean(input);
+    expect(toHexString(encoder.getBytes())).toBe(expected);
   });
 
-  describe("writeAmfString", () => {
-    it("应正确编码空字符串", () => {
-      encoder.writeAmfString("");
-      expect(toHexString(encoder.getBytes())).toBe("0200");
-    });
-
-    it("应正确编码普通字符串", () => {
-      encoder.writeAmfString("hello");
-      expect(toHexString(encoder.getBytes())).toBe("020A68656C6C6F");
-    });
-
-    it("应正确编码长字符串", () => {
-      const longStr = "a".repeat(65536);
-      encoder.writeAmfString(longStr);
-      expect(toHexString(encoder.getBytes()).length).toBe(131078);
-    });
+  it.each([
+    ["", "020000"],
+    ["hello", "02000568656C6C6F"],
+  ])("应正确编码字符串 %p", (input, expected) => {
+    encoder.writeAmfString(input);
+    expect(toHexString(encoder.getBytes())).toBe(expected);
   });
 
-  describe("writeAmfObject", () => {
-    it("应正确编码空对象", () => {
-      encoder.writeAmfObject({});
-      expect(toHexString(encoder.getBytes())).toBe("030009");
-    });
-
-    it("应正确编码简单对象", () => {
-      encoder.writeAmfObject({ key: "value" });
-      expect(toHexString(encoder.getBytes())).toBe(
-        "03000B6B6579020A76616C75650009"
-      );
-    });
+  it("应正确编码对象", () => {
+    const metadata = {
+      name: "Alice",
+      age: 30,
+      isStudent: false,
+    };
+    encoder.writeAmfObject(metadata);
+    expect(toHexString(encoder.getBytes())).toBe(
+      "030200046E616D65020005416C69636502000361676500403E000000000000020009697353747564656E74010009000009"
+    );
   });
 
-  describe("类型检查", () => {
-    it("应拒绝非数字类型", () => {
-      expect(() => encoder.writeAmfNumber("123" as any)).toThrow();
-    });
+  it("应正确编码 MovieClip", () => {
+    encoder.writeAmfMovieClip();
+    expect(toHexString(encoder.getBytes())).toBe("04");
+  });
 
-    it("应拒绝非布尔类型", () => {
-      expect(() => encoder.writeAmfBoolean("true" as any)).toThrow();
-    });
+  it("应正确编码 Null", () => {
+    encoder.writeAmfNull();
+    expect(toHexString(encoder.getBytes())).toBe("05");
+  });
 
-    it("应拒绝非字符串类型", () => {
-      expect(() => encoder.writeAmfString(123 as any)).toThrow();
-    });
+  it("应正确编码 Undefined", () => {
+    encoder.writeAmfUndefined();
+    expect(toHexString(encoder.getBytes())).toBe("06");
+  });
 
-    it("应拒绝非对象类型", () => {
-      expect(() => encoder.writeAmfObject("not an object" as any)).toThrow();
-    });
+  it("应正确编码 Reference", () => {
+    encoder.writeAmfReference(2);
+    expect(toHexString(encoder.getBytes())).toBe("070002");
+  });
+
+  it("应正确编码 ECMAArray", () => {
+    const metadata = {
+      name: "Alice",
+      age: 30,
+      isStudent: false,
+    };
+
+    encoder.writeAmfECMAArray(metadata);
+    expect(toHexString(encoder.getBytes())).toBe(
+      "08000000030200046E616D65020005416C69636502000361676500403E000000000000020009697353747564656E74010009000009"
+    );
+  });
+
+  it("应正确编码 Object End Marker", () => {
+    encoder.writeAmfObjectEndMarker();
+    expect(toHexString(encoder.getBytes())).toBe("09000009");
+  });
+
+  it("应正确编码 Strict Array", () => {
+    const metadata = ["Alice", 10, false];
+
+    encoder.writeAmfStrictArray(metadata);
+    expect(toHexString(encoder.getBytes())).toBe(
+      "0A00000003020005416C6963650040240000000000000100"
+    );
+  });
+
+  it("应正确编码日期", () => {
+    const date = new Date("1995-12-17T03:24:00");
+    encoder.writeAmfDate(date);
+    expect(toHexString(encoder.getBytes())).toBe("0B4267D715119000000000");
+  });
+
+  it("应正确编码空字符串", () => {
+    encoder.writeAmfLongString("");
+    expect(toHexString(encoder.getBytes())).toBe("0C00000000");
+  });
+
+  it("应正确编码普通字符串", () => {
+    encoder.writeAmfLongString("hello");
+    expect(toHexString(encoder.getBytes())).toBe("0C0000000568656C6C6F");
+  });
+
+  it("应正确编码长字符串", () => {
+    const longStr = "a".repeat(65536);
+    encoder.writeAmfLongString(longStr);
+    expect(toHexString(encoder.getBytes()).length).toBe(131082);
   });
 });

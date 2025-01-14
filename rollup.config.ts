@@ -17,6 +17,11 @@ export default defineConfig([
         file: pkg.exports.require,
         format: "cjs",
       },
+      {
+        file: "./dist/flv-muxer.umd.js",
+        format: "umd",
+        name: "my umd",
+      },
     ],
     plugins: [typescript()],
   },

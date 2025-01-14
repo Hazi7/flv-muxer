@@ -1,0 +1,10 @@
+[package]
+name = "flv-muxer"
+version = "0.1.0"
+
+[lib]
+path = "src-wasm/lib.rs"
+
+[[bin]]
+name = "my"
+path = "src-wasm/main.rs"
