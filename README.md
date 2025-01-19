@@ -1,5 +1,7 @@
 # FlvMuxer
 
+English | [中文](./README_CN.md)
+
 `flv-muxer.js` is a pure TypeScript-written FLV muxer used to implement native FLV streaming/recording on the Web platform.
 
 ## Use Cases

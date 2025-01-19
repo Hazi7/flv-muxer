@@ -1,6 +1,6 @@
 # FlvMuxer
 
-English | [中文](./README_CN.md)
+[English](./README.md) | 中文
 
 `flv-muxer.js` 是一个纯TS编写的 `flv` 复用器，用于在 Web 平台实现原生 `flv` 推流/录屏。
 
@@ -16,7 +16,7 @@ English | [中文](./README_CN.md)
 从 NPM 安装，输入以下命令：
 
 ```shell
-npm install flv-muxer
+  npm install flv-muxer
 ```
 
 从 CDN 链接下载：
