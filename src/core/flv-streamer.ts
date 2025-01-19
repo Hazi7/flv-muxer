@@ -1,13 +1,16 @@
+import console from "console";
 import { SoundFormat } from "../constants/audio-type";
 import { CodeId } from "../constants/video-type";
 import { FlvWriter } from "./flv-writer";
 import { MediaBuffer, type MediaChunk } from "./media-buffer";
 
 export interface MuxerOptions {
-  audio?: boolean;
-  video?: boolean;
-  videocodecid?: CodeId;
-  audiocodecid?: SoundFormat;
+  video: boolean;
+  videocodecid: CodeId;
+  framerate: number;
+  audio: boolean;
+  audiocodecid: SoundFormat;
+  stereo: boolean;
 }
 
 /**
@@ -18,8 +21,6 @@ export class FlvStreamer extends FlvWriter {
   private _audioDecoderConfig: AudioDecoderConfig | null = null;
   private baseTimestamp: number | null = null;
   private waitingKeyframe: boolean = true;
-  private videoLastTimestamp: number = 0;
-  private audioLastTimestamp: number = 0;
 
   get audioDecoderConfig() {
     return this._audioDecoderConfig;
@@ -61,9 +62,11 @@ export class FlvStreamer extends FlvWriter {
     writable: WritableStream<Uint8Array>,
     options: MuxerOptions = {
       video: true,
-      audio: true,
       videocodecid: CodeId.AVC,
+      framerate: 30,
+      audio: true,
       audiocodecid: SoundFormat.AAC,
+      stereo: true,
     }
   ) {
     super();
@@ -104,17 +107,22 @@ export class FlvStreamer extends FlvWriter {
 
     if (this.options.video) {
       Object.assign(metadata, {
-        videocodecid: 7,
+        // 不需要配置，从编码器中获取
         width: this.videoDecoderConfig?.codedWidth,
         height: this.videoDecoderConfig?.codedHeight,
+        // 需要创建对象时候手动设置
+        videocodecid: this.options.videocodecid,
+        framerate: this.options.framerate,
       });
     }
 
     if (this.options.audio) {
       Object.assign(metadata, {
-        audiocodecid: 10, // AAC
+        // 不需要配置，从编码器中获取
         audiosamplerate: this.audioDecoderConfig?.sampleRate,
-        stereo: true,
+        // 需要创建对象时候手动设置
+        audiocodecid: this.options.audiocodecid,
+        stereo: this.options.stereo,
       });
     }
 
@@ -135,16 +143,13 @@ export class FlvStreamer extends FlvWriter {
     // 第一帧必须是关键帧
     if (this.waitingKeyframe) {
       if (isKeyFrame) {
+        console.log(metadata);
         this.waitingKeyframe = false;
       } else return;
     }
 
-    // 如果时间戳相同则 +1，维持单调递增
+    // 转换成相对时间戳
     let timestamp = this.calculateTimestamp(chunk.timestamp);
-    if (timestamp <= this.videoLastTimestamp) {
-      timestamp = this.videoLastTimestamp + 1;
-    }
-    this.videoLastTimestamp = timestamp;
 
     // 如果是信息包
     if (metadata?.decoderConfig?.description) {
@@ -196,14 +201,12 @@ export class FlvStreamer extends FlvWriter {
     chunk: EncodedAudioChunk,
     metadata?: EncodedAudioChunkMetadata
   ) {
+    // 转换成相对时间戳
     let timestamp = this.calculateTimestamp(chunk.timestamp);
 
-    if (timestamp <= this.audioLastTimestamp) {
-      timestamp = this.audioLastTimestamp + 1;
-    }
-    this.audioLastTimestamp = timestamp;
-
     if (metadata?.decoderConfig?.description) {
+      console.log(chunk);
+
       this.audioDecoderConfig = metadata.decoderConfig;
 
       if (this.audioDecoderConfig.description) {
