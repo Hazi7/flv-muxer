@@ -38,6 +38,7 @@ export class MediaBuffer<T> extends RingBuffer<T> {
   }
 
   clear() {
-    this.clear();
+    super.clear();
+    this.subs = [];
   }
 }
