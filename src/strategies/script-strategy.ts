@@ -1,5 +1,5 @@
 import { AmfType } from "../constants/amf-type";
-import { ScriptEncoder } from "./script-encoder";
+import { ScriptEncoder } from "../core/script-encoder";
 
 export interface ScriptDataStrategy {
   write(value: any, encoder: ScriptEncoder): void;

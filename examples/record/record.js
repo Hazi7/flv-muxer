@@ -25,11 +25,11 @@ const writable = new WritableStream({
 });
 
 const flvMuxer = new MyBundle.FlvStreamer(writable);
-const videoHandler = flvMuxer.getVideoChunkHandler();
-const audioHandler = flvMuxer.getAudioChunkHandler();
 
 const videoEncoder = new VideoEncoder({
-  output: videoHandler,
+  output: (chunk, metadata) => {
+    flvMuxer.handleVideoChunk(chunk, metadata);
+  },
   error: (error) => {
     // 处理编码过程中的错误
     console.error("VideoEncoder error:", error);
@@ -43,7 +43,9 @@ videoEncoder.configure({
 });
 
 const audioEncoder = new AudioEncoder({
-  output: audioHandler,
+  output: (chunk, metadata) => {
+    flvMuxer.handleAudioChunk(chunk, metadata);
+  },
   error: (error) => {
     // 处理编码过程中的错误
     console.error("VideoEncoder error:", error);
@@ -62,8 +64,6 @@ async function startRecording() {
   const flvWorker = loadWorker();
   const videoTrack = stream.getVideoTracks()[0];
   const audioTrack = stream.getAudioTracks()[0];
-
-  flvMuxer.start();
 
   // 创建两个独立的处理函数
   async function processVideo() {

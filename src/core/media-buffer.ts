@@ -1,62 +1,43 @@
-import EventEmitter from "eventemitter3";
-
 import { RingBuffer } from "./ring-buffer";
 
-interface MediaChunk {
+export interface MediaChunk {
   type: "video" | "audio";
   data: Uint8Array | undefined;
   timestamp: number;
 }
 
-export class MediaBuffer extends EventEmitter {
-  private videoChunks: RingBuffer<MediaChunk>;
-  private audioChunks: RingBuffer<MediaChunk>;
+export class MediaBuffer<T> extends RingBuffer<T> {
+  private subs: ((data: T) => void)[] = [];
 
-  constructor(bufferSize: number = 128) {
-    super();
-    this.videoChunks = new RingBuffer<MediaChunk>(bufferSize);
-    this.audioChunks = new RingBuffer<MediaChunk>(bufferSize);
+  constructor() {
+    super(512);
   }
 
-  addVideoChunk(chunk: MediaChunk) {
-    this.videoChunks.push(chunk);
-    this.emit("dataAvailable", { type: "video" });
+  subscribe(callback: (data: T) => void) {
+    this.subs.push(callback);
+
+    return () => {
+      const index = this.subs.indexOf(callback);
+      if (index == -1) {
+        this.subs.splice(index, 1);
+      }
+    };
   }
 
-  addAudioChunk(chunk: MediaChunk) {
-    this.audioChunks.push(chunk);
-    this.emit("dataAvailable", { type: "audio" });
+  addChunk(chunk: T) {
+    this.enqueue(chunk);
+    this.notifySubs(chunk);
+  }
+
+  private notifySubs(data: T) {
+    this.subs.forEach((callback) => callback(data));
   }
 
   getNextChunk() {
-    if (this.videoChunks.length === 0 && this.audioChunks.length === 0) {
-      return null;
-    }
-
-    if (this.videoChunks.length === 0) {
-      return this.audioChunks.shift()?.data ?? null;
-    }
-
-    if (this.audioChunks.length === 0) {
-      return this.videoChunks.shift()?.data ?? null;
-    }
-
-    const nextVideo = this.videoChunks.peek();
-    const nextAudio = this.audioChunks.peek();
-
-    if (!nextVideo || !nextAudio) {
-      return null;
-    }
-
-    if (nextVideo.timestamp <= nextAudio.timestamp) {
-      return this.videoChunks.shift()?.data ?? null;
-    } else {
-      return this.audioChunks.shift()?.data ?? null;
-    }
+    return this.dequeue();
   }
 
   clear() {
-    this.videoChunks.clear();
-    this.audioChunks.clear();
+    this.clear();
   }
 }

@@ -123,6 +123,27 @@ export class FlvWriter extends ScriptEncoder {
   }
 
   /**
+   * 创建一个脚本数据标签。
+   * @param {Record<string, any>} metadata - 要包含在脚本数据标签中的元数据。
+   * @returns {Uint8Array} - 作为 Uint8Array 的脚本数据标签。
+   */
+  createScriptDataTag(metadata: Record<string, any>): Uint8Array {
+    this.reset();
+
+    this.writeScriptDataValue("onMetaData");
+    this.writeScriptDataValue(metadata);
+
+    // 创建 ScriptTag
+    const scriptTag = this.createFlvTag(
+      "ScriptData",
+      new Uint8Array(0),
+      0,
+      this.getBytes()
+    );
+    return scriptTag;
+  }
+
+  /**
    * 创建一个视频标签。
    * @param {keyof typeof FrameType} frameType - 视频帧的类型。
    * @param {keyof typeof CodeId} codecId - 视频的编解码器 ID。
@@ -185,27 +206,5 @@ export class FlvWriter extends ScriptEncoder {
       ]);
       return this.createFlvTag("Audio", header, timestamp, audioData);
     }
-  }
-
-  /**
-   * 创建一个脚本数据标签。
-   * @param {Record<string, any>} metadata - 要包含在脚本数据标签中的元数据。
-   * @returns {Uint8Array} - 作为 Uint8Array 的脚本数据标签。
-   */
-  createScriptDataTag(metadata: Record<string, any>): Uint8Array {
-    this.reset();
-
-    this.writeScriptDataValue("onMetaData");
-
-    this.writeScriptDataValue(metadata);
-
-    // 创建 ScriptTag
-    const scriptTag = this.createFlvTag(
-      "ScriptData",
-      new Uint8Array(0),
-      0,
-      this.getBytes()
-    );
-    return scriptTag;
   }
 }

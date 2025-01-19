@@ -1,27 +1,34 @@
 export class RingBuffer<T> {
   private buffer: (T | undefined)[];
-  private head: number = 0; // 写入位置
-  private tail: number = 0; // 读取位置
-  private size: number = 0; // 当前存储的元素数量
+  private head: number = 0; // 指向下一个写入的位置
+  private tail: number = 0; // 指向下一个读取的位置
+  private size: number = 0; // 当前缓冲区的大小（元素个数）
 
   constructor(private capacity: number) {
+    if (capacity <= 0) {
+      throw new Error("缓冲区容量不能小于 0");
+    }
+
     this.buffer = new Array(capacity);
   }
 
-  push(item: T): void {
-    this.buffer[this.head] = item;
-    this.head = (this.head + 1) % this.capacity;
-
-    if (this.size < this.capacity) {
-      this.size++;
-    } else {
-      // 缓冲区已满,移动tail
-      this.tail = (this.tail + 1) % this.capacity;
-    }
+  get length() {
+    return this.size;
   }
 
-  shift(): T | undefined {
-    if (this.size === 0) {
+  enqueue(item: T) {
+    if (this.isFull()) {
+      this.tail = (this.tail + 1) % this.capacity;
+    } else {
+      this.size++;
+    }
+
+    this.buffer[this.head] = item;
+    this.head = (this.head + 1) % this.capacity;
+  }
+
+  dequeue() {
+    if (this.isEmpty()) {
       return undefined;
     }
 
@@ -33,15 +40,11 @@ export class RingBuffer<T> {
     return item;
   }
 
-  peek(): T | undefined {
-    if (this.size === 0) {
+  peek() {
+    if (this.isEmpty()) {
       return undefined;
     }
     return this.buffer[this.tail];
-  }
-
-  get length(): number {
-    return this.size;
   }
 
   clear(): void {
@@ -49,5 +52,13 @@ export class RingBuffer<T> {
     this.head = 0;
     this.tail = 0;
     this.size = 0;
+  }
+
+  isEmpty() {
+    return this.size === 0;
+  }
+
+  isFull() {
+    return this.size === this.capacity;
   }
 }
