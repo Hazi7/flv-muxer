@@ -9,7 +9,7 @@ export interface MuxerOptions {
   framerate: number;
   audio: boolean;
   audiocodecid: SoundFormat;
-  stereo: boolean
+  stereo: boolean;
 }
 
 /**
@@ -154,7 +154,6 @@ export class FlvStreamer extends FlvWriter {
       // 第一帧必须是关键帧
       if (this.waitingKeyframe) {
         if (isKeyFrame) {
-          console.log(metadata);
           this.waitingKeyframe = false;
         } else return;
       }
@@ -220,8 +219,6 @@ export class FlvStreamer extends FlvWriter {
       let timestamp = this.calculateTimestamp(chunk.timestamp);
 
       if (metadata?.decoderConfig?.description) {
-        console.log(chunk);
-
         this.audioDecoderConfig = metadata.decoderConfig;
 
         if (this.audioDecoderConfig.description) {

@@ -3,6 +3,7 @@ async function getDisplayMedia() {
     video: {
       frameRate: {
         ideal: 30,
+        max: 30,
       },
       width: 1920,
       height: 1080,
@@ -12,6 +13,10 @@ async function getDisplayMedia() {
 }
 
 let recordingChunks = [];
+
+function loadWorker() {
+  return new Worker("sw.js");
+}
 
 const writable = new WritableStream({
   write: (chunk) => {
@@ -27,19 +32,9 @@ const flvMuxer = new MyBundle.FlvStreamer(writable, {
   audiocodecid: 10,
 });
 
-function readAndEncode(reader, encoder) {
-  reader.read().then(({ done, value }) => {
-    if (done) return;
-
-    encoder.encode(value);
-    value.close();
-
-    readAndEncode(reader, encoder);
-  });
-}
-
 const videoEncoder = new VideoEncoder({
   output: (chunk, metadata) => {
+    console.log(chunk.timestamp)
     flvMuxer.handleVideoChunk(chunk, metadata);
   },
   error: (error) => {
@@ -56,7 +51,7 @@ videoEncoder.configure({
 
 const audioEncoder = new AudioEncoder({
   output: (chunk, metadata) => {
-    console.log(chunk.timestamp);
+    console.log(chunk.timestamp)
     flvMuxer.handleAudioChunk(chunk, metadata);
   },
   error: (error) => {
@@ -74,24 +69,48 @@ audioEncoder.configure({
 
 async function startRecording() {
   const stream = await getDisplayMedia();
-
+  const flvWorker = loadWorker();
   const videoTrack = stream.getVideoTracks()[0];
-  const videoReader = await new MediaStreamTrackProcessor({
-    track: videoTrack,
-  }).readable.getReader();
-
-  readAndEncode(videoReader, videoEncoder);
-
   const audioTrack = stream.getAudioTracks()[0];
-  const audioReader = await new MediaStreamTrackProcessor({
-    track: audioTrack,
-  }).readable.getReader();
 
-  readAndEncode(audioReader, audioEncoder);
+  // 创建两个独立的处理函数
+  async function processVideo() {
+    const videoReadableStream = new MediaStreamTrackProcessor({
+      track: videoTrack,
+    }).readable;
+
+    for await (const chunk of videoReadableStream) {
+      videoEncoder.encode(chunk);
+      chunk.close();
+    }
+  }
+
+  async function processAudio() {
+    const audioReadableStream = new MediaStreamTrackProcessor({
+      track: audioTrack,
+    }).readable;
+
+    for await (const chunk of audioReadableStream) {
+      audioEncoder.encode(chunk);
+      chunk.close();
+    }
+  }
+
+  // 并行处理视频和音频
+  Promise.all([processVideo(), processAudio()]).catch((error) => {
+    console.error("Stream processing error:", error);
+  });
+
+  flvWorker.postMessage({
+    type: "START_RECORDING",
+  });
 }
 
 async function stopRecording() {
   try {
+    // Stop all tracks
+
+    // Close encoder
     if (videoEncoder) {
       await videoEncoder.flush();
       videoEncoder.close();
