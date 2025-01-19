@@ -31,3 +31,8 @@ export enum SoundType {
   Mono = 0,
   Stereo = 1,
 }
+
+export enum AACPacketType {
+  AACSequenceHeader = 0,
+  AACRaw = 1,
+}

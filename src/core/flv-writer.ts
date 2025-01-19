@@ -1,4 +1,5 @@
 import {
+  AACPacketType,
   SoundFormat,
   SoundRate,
   SoundSize,
@@ -6,9 +7,24 @@ import {
 } from "../constants/audio-type";
 import { TagType } from "../constants/tag-type";
 import { AvcPacketType, CodeId, FrameType } from "../constants/video-type";
-import { AmfEncoder } from "./amf-encoder";
+import { ScriptEncoder } from "./script-encoder";
 
-export class FlvWriter extends AmfEncoder {
+type AudioTagParams<T extends keyof typeof SoundFormat> = {
+  soundFormat: T;
+  soundRate: keyof typeof SoundRate;
+  soundSize: keyof typeof SoundSize;
+  soundType: keyof typeof SoundType;
+  timestamp: number;
+} & (T extends "AAC"
+  ? {
+      audioData: Uint8Array;
+      aacPacketType: keyof typeof AACPacketType;
+    }
+  : {
+      audioData?: never;
+    });
+
+export class FlvWriter extends ScriptEncoder {
   constructor() {
     super();
   }
@@ -92,34 +108,40 @@ export class FlvWriter extends AmfEncoder {
     return this.createFlvTag("Video", header, timestamp, videoBody);
   }
 
-  createAudioTag(
-    soundFormat: keyof typeof SoundFormat,
-    soundRate: keyof typeof SoundRate,
-    soundSize: keyof typeof SoundSize,
-    soundType: keyof typeof SoundType,
-    timestamp: number,
-    audioData: Uint8Array
+  createAudioTag<T extends keyof typeof SoundFormat>(
+    params: AudioTagParams<T>
   ) {
-    const header = new Uint8Array(1);
+    const {
+      soundFormat,
+      soundRate,
+      soundSize,
+      soundType,
+      timestamp,
+      audioData,
+    } = params;
 
     // 音频格式（4位） | 采样率（2位） | 音频样本大小（1位） | 音频类型（1位）
-    header[0] =
+    const firstByte =
       (SoundFormat[soundFormat] << 4) |
       (SoundRate[soundRate] << 2) |
       (SoundSize[soundSize] << 1) |
       SoundType[soundType];
 
-    return this.createFlvTag("Audio", header, timestamp, audioData);
+    if (soundFormat === "AAC" && audioData) {
+      const header = new Uint8Array([
+        firstByte,
+        AACPacketType[params.aacPacketType],
+      ]);
+      return this.createFlvTag("Audio", header, timestamp, audioData);
+    }
   }
 
   createScriptDataTag(metadata: Record<string, any>) {
     this.reset();
 
-    // 写入第一个 AMF 字符串
-    this.writeAmfValue("onMetaData");
+    this.writeScriptDataValue("onMetaData");
 
-    // 写入第二个 ECMA Array
-    this.writeAmfECMAArray(metadata);
+    this.writeScriptDataValue(metadata);
 
     // 创建 ScriptTag
     const scriptTag = this.createFlvTag(

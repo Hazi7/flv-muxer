@@ -8,7 +8,25 @@
     />
     <title>Document</title>
   </head>
-  <script src="../../dist/flv-muxer.umd.js"></script>
-  <script src="./record.js"></script>
-  <body></body>
+
+  <body>
+    <button
+      class="start-button"
+      type="button"
+      title="开始按钮"
+      onclick="startRecording()"
+    >
+      开始按钮
+    </button>
+    <button
+      class="stop-button"
+      type="button"
+      title="结束录制"
+      onclick="stopRecording()"
+    >
+      结束录制
+    </button>
+    <script src="../../dist/flv-muxer.iife.js"></script>
+    <script src="./record.js"></script>
+  </body>
 </html>

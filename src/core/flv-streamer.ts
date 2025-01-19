@@ -1,4 +1,5 @@
 import { FlvWriter } from "./flv-writer";
+import { MediaBuffer } from "./media-buffer";
 
 export interface FlvStreamOptions {
   hasAudio?: boolean;
@@ -20,11 +21,13 @@ export class FlvStreamer extends FlvWriter {
   private readonly videoChunkHandler?: EncodedVideoChunkOutputCallback;
   private readonly audioChunkHandler?: EncodedAudioChunkOutputCallback;
 
-  private baseTimestamp: number = 0;
-  private firstTimestamp: number | null = null;
+  private readonly mediaBuffer: MediaBuffer;
+
+  private baseTimestamp: number | null = null;
   private waitingKeyframe: boolean = true;
   private videoSequenceHeader: Uint8Array | null = null;
-  private lastTimestamp: number = 0;
+  private videoLastTimestamp: number = 0;
+  private audioLastTimestamp: number = 0;
 
   /**
    * 创建FlvStreamer的实例。
@@ -39,13 +42,14 @@ export class FlvStreamer extends FlvWriter {
     this.writable = writable;
     this.writer = this.writable.getWriter();
     this.options = {
-      hasAudio: false,
+      hasAudio: true,
       hasVideo: true,
-      width: 1280,
-      height: 720,
+      width: 1920,
+      height: 1080,
       videoFrameRate: 30,
       ...options,
     };
+    this.mediaBuffer = new MediaBuffer();
 
     if (this.options.hasVideo) {
       this.videoChunkHandler = this.handleVideoChunk.bind(this);
@@ -66,6 +70,16 @@ export class FlvStreamer extends FlvWriter {
     await this.writer.write(header);
 
     await this.writeMetadata();
+
+    this.mediaBuffer.on("dataAvailable", () => {
+      const chunk = this.mediaBuffer.getNextChunk();
+      if (chunk) {
+        this.writer.write(chunk);
+      }
+    });
+    // this.mediaObservable.subscribe((chunk) => {
+    //   this.writer.write(chunk.data);
+    // });
   }
 
   /**
@@ -74,7 +88,7 @@ export class FlvStreamer extends FlvWriter {
   private async writeMetadata() {
     const metadata: Record<string, any> = {
       duration: 0,
-      encoder: "FlvStreamWriter",
+      encoder: "flv-muxer.js",
     };
 
     if (this.options.hasVideo) {
@@ -91,7 +105,6 @@ export class FlvStreamer extends FlvWriter {
       Object.assign(metadata, {
         audiocodecid: 10, // AAC
         audiosamplerate: 44100,
-        audiosamplesize: 16,
         stereo: true,
       });
     }
@@ -109,15 +122,13 @@ export class FlvStreamer extends FlvWriter {
     chunk: EncodedVideoChunk,
     metadata?: EncodedVideoChunkMetadata
   ) {
-    const data = new Uint8Array(chunk.byteLength);
-    chunk.copyTo(data);
+    console.log(chunk);
+    let timestamp = this.calculateTimestamp(chunk.timestamp);
 
-    let timestamp = this.calculateTimestamp(chunk.timestamp / 1000);
-
-    if (timestamp <= this.lastTimestamp) {
-      timestamp = this.lastTimestamp + 1;
+    if (timestamp <= this.videoLastTimestamp) {
+      timestamp = this.videoLastTimestamp + 1;
     }
-    this.lastTimestamp = timestamp;
+    this.videoLastTimestamp = timestamp;
 
     const isKeyFrame = chunk.type === "key";
 
@@ -126,7 +137,7 @@ export class FlvStreamer extends FlvWriter {
     }
     this.waitingKeyframe = false;
 
-    if (metadata?.decoderConfig) {
+    if (metadata?.decoderConfig?.description) {
       this.videoSequenceHeader = new Uint8Array(
         metadata.decoderConfig.description as ArrayBuffer
       );
@@ -140,8 +151,16 @@ export class FlvStreamer extends FlvWriter {
         this.videoSequenceHeader
       );
 
-      await this.writer.write(sequenceTag);
+      this.mediaBuffer.addVideoChunk({
+        type: "video",
+        data: sequenceTag,
+        timestamp: 0,
+      });
+      // await this.writer.write(sequenceTag);
     }
+
+    const data = new Uint8Array(chunk.byteLength);
+    chunk.copyTo(data);
 
     const videoTag = this.createVideoTag(
       isKeyFrame ? "KeyFrame" : "InterFrame",
@@ -152,7 +171,75 @@ export class FlvStreamer extends FlvWriter {
       data
     );
 
-    await this.writer.write(videoTag);
+    this.mediaBuffer.addVideoChunk({
+      type: "video",
+      data: videoTag,
+      timestamp,
+    });
+    // await this.writer.write(videoTag);
+  }
+
+  /**
+   * 处理传入的音频块并将其写入FLV流。
+   * @param chunk - 要处理的音频块。
+   * @param metadata - 与音频块关联的可选元数据。
+   */
+  async handleAudioChunk(
+    chunk: EncodedAudioChunk,
+    metadata?: EncodedAudioChunkMetadata
+  ) {
+    console.log(chunk);
+    let timestamp = this.calculateTimestamp(chunk.timestamp);
+
+    if (timestamp <= this.audioLastTimestamp) {
+      timestamp = this.audioLastTimestamp + 1;
+    }
+    this.audioLastTimestamp = timestamp;
+
+    if (metadata?.decoderConfig?.description) {
+      // AAC序列头
+      const aacSequenceHeader = new Uint8Array(
+        metadata.decoderConfig.description as ArrayBuffer
+      );
+
+      const sequenceTag = this.createAudioTag<"AAC">({
+        soundFormat: "AAC",
+        soundRate: "kHz44",
+        soundSize: "Sound16bit",
+        soundType: "Stereo",
+        timestamp: 0,
+        audioData: aacSequenceHeader,
+        aacPacketType: "AACSequenceHeader",
+      });
+
+      this.mediaBuffer.addAudioChunk({
+        type: "audio",
+        data: sequenceTag,
+        timestamp: 0,
+      });
+    }
+
+    const data = new Uint8Array(chunk.byteLength);
+    chunk.copyTo(data);
+
+    // AAC原始数据
+    const audioTag = this.createAudioTag<"AAC">({
+      soundFormat: "AAC",
+      soundRate: "kHz44",
+      soundSize: "Sound16bit",
+      soundType: "Stereo",
+      timestamp,
+      audioData: data,
+      aacPacketType: "AACRaw",
+    });
+
+    this.mediaBuffer.addAudioChunk({
+      type: "audio",
+      data: audioTag,
+      timestamp,
+    });
+
+    // await this.writer.write(audioTag);
   }
 
   /**
@@ -160,11 +247,12 @@ export class FlvStreamer extends FlvWriter {
    * @param timestamp - 块的原始时间戳。
    * @returns 调整后的时间戳。
    */
-  private calculateTimestamp(timestamp: number): number {
-    if (this.firstTimestamp === null) {
-      this.firstTimestamp = timestamp;
+  private calculateTimestamp(timestamp: number) {
+    if (this.baseTimestamp === null) {
+      this.baseTimestamp = timestamp;
     }
-    return Math.max(0, timestamp - this.firstTimestamp + this.baseTimestamp);
+
+    return Math.max(0, (timestamp - this.baseTimestamp) / 1000);
   }
 
   /**
@@ -177,56 +265,6 @@ export class FlvStreamer extends FlvWriter {
 
   getAudioChunkHandler() {
     return this.audioChunkHandler;
-  }
-
-  /**
-   * 处理传入的音频块并将其写入FLV流。
-   * @param chunk - 要处理的音频块。
-   * @param metadata - 与音频块关联的可选元数据。
-   */
-  async handleAudioChunk(
-    chunk: EncodedAudioChunk,
-    metadata?: EncodedAudioChunkMetadata
-  ) {
-    const data = new Uint8Array(chunk.byteLength);
-    chunk.copyTo(data);
-
-    let timestamp = this.calculateTimestamp(chunk.timestamp / 1000);
-
-    if (timestamp <= this.lastTimestamp) {
-      timestamp = this.lastTimestamp + 1;
-    }
-    this.lastTimestamp = timestamp;
-
-    if (metadata?.decoderConfig) {
-      // AAC序列头
-      const aacSequenceHeader = new Uint8Array(
-        metadata.decoderConfig.description as ArrayBuffer
-      );
-
-      const sequenceTag = this.createAudioTag(
-        "AAC",
-        "kHz44",
-        "Sound16bit",
-        "Stereo",
-        0,
-        aacSequenceHeader
-      );
-
-      await this.writer.write(sequenceTag);
-    }
-
-    // AAC原始数据
-    const audioTag = this.createAudioTag(
-      "AAC",
-      "kHz44",
-      "Sound16bit",
-      "Stereo",
-      timestamp,
-      data
-    );
-
-    await this.writer.write(audioTag);
   }
 
   /**

@@ -1,3 +1,5 @@
+import commonjs from "@rollup/plugin-commonjs";
+import resolve from "@rollup/plugin-node-resolve";
 import typescript from "@rollup/plugin-typescript";
 import { readFileSync } from "fs";
 import { defineConfig } from "rollup";
@@ -18,12 +20,13 @@ export default defineConfig([
         format: "cjs",
       },
       {
-        file: "./dist/flv-muxer.umd.js",
-        format: "umd",
-        name: "my umd",
+        file: "./dist/flv-muxer.iife.js",
+        format: "iife",
+        name: "MyBundle",
+        sourcemap: true,
       },
     ],
-    plugins: [typescript()],
+    plugins: [typescript(), resolve(), commonjs()],
   },
   {
     input: "dist/main.d.ts",

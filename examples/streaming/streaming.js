@@ -8,7 +8,7 @@ async function getDisplayMedia() {
       width: 1920,
       height: 1080,
     },
-    audio: true,
+    audio: {},
   });
 }
 
@@ -18,9 +18,13 @@ function loadWorker() {
   return new Worker("sw.js");
 }
 
+const ws = new WebSocket("ws://127.0.0.1:3000/livestream/push");
+// const ws = new WebSocket("ws://49.232.183.67:9998/live/first");
+
 const writable = new WritableStream({
   write: (chunk) => {
-    recordingChunks.push(chunk);
+    // recordingChunks.push(chunk);
+    ws.send(chunk);
   },
 });
 
@@ -57,41 +61,68 @@ audioEncoder.configure({
   bitrate: 128000,
 });
 
-async function startRecording() {
+async function startRecoding() {
   const stream = await getDisplayMedia();
   const flvWorker = loadWorker();
+
   const videoTrack = stream.getVideoTracks()[0];
   const audioTrack = stream.getAudioTracks()[0];
 
   flvMuxer.start();
 
-  // 创建两个独立的处理函数
-  async function processVideo() {
-    const videoReadableStream = new MediaStreamTrackProcessor({
-      track: videoTrack,
-    }).readable;
+  const videoReader = new MediaStreamTrackProcessor({
+    track: videoTrack,
+  }).readable;
 
-    for await (const chunk of videoReadableStream) {
-      videoEncoder.encode(chunk);
-      chunk.close();
-    }
-  }
+  let lastTime = 0;
 
-  async function processAudio() {
-    const audioReadableStream = new MediaStreamTrackProcessor({
-      track: audioTrack,
-    }).readable;
+  videoReader
+    .pipeThrough(
+      new TransformStream({
+        transform: (chunk) => {
+          const newTime = performance.now();
+          if (newTime - lastTime >= 2000) {
+            videoEncoder.encode(chunk, { keyFrame: true });
+            console.log(true);
+            lastTime = performance.now();
+          } else {
+            videoEncoder.encode(chunk, { keyFrame: false });
+          }
+          chunk.close();
+        },
+      })
+    )
 
-    for await (const chunk of audioReadableStream) {
-      audioEncoder.encode(chunk);
-      chunk.close();
-    }
-  }
+    .pipeTo(
+      new WritableStream({
+        write: (chunk) => {
+          console.log(chunk);
+        },
+      })
+    );
 
-  // 并行处理视频和音频
-  Promise.all([processVideo(), processAudio()]).catch((error) => {
-    console.error("Stream processing error:", error);
-  });
+  const audioReader = new MediaStreamTrackProcessor({
+    track: audioTrack,
+  }).readable;
+
+  audioReader
+    .pipeThrough(
+      new TransformStream({
+        transform: (chunk) => {
+          audioEncoder.encode(chunk);
+          chunk.close();
+        },
+      })
+    )
+    .pipeTo(
+      new WritableStream({
+        write: (chunk) => {
+          console.log(chunk);
+        },
+      })
+    );
+
+  const channel = new MessageChannel();
 
   flvWorker.postMessage({
     type: "START_RECORDING",
@@ -106,11 +137,6 @@ async function stopRecording() {
     if (videoEncoder) {
       await videoEncoder.flush();
       videoEncoder.close();
-    }
-
-    if (audioEncoder) {
-      await audioEncoder.flush();
-      audioEncoder.close();
     }
 
     // Save the file

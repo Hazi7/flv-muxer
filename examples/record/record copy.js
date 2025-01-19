@@ -8,7 +8,7 @@ async function getDisplayMedia() {
       width: 1920,
       height: 1080,
     },
-    audio: true,
+    audio: {},
   });
 }
 
@@ -57,45 +57,50 @@ audioEncoder.configure({
   bitrate: 128000,
 });
 
-async function startRecording() {
+async function startRecoding() {
   const stream = await getDisplayMedia();
   const flvWorker = loadWorker();
+
   const videoTrack = stream.getVideoTracks()[0];
   const audioTrack = stream.getAudioTracks()[0];
 
+  const videoReader = await new MediaStreamTrackProcessor({
+    track: videoTrack,
+  }).readable.getReader();
+
+  const audioReader = await new MediaStreamTrackProcessor({
+    track: audioTrack,
+  }).readable.getReader();
+
   flvMuxer.start();
+  encodeAudioMedia();
+  encodeVideoMedia();
 
-  // 创建两个独立的处理函数
-  async function processVideo() {
-    const videoReadableStream = new MediaStreamTrackProcessor({
-      track: videoTrack,
-    }).readable;
-
-    for await (const chunk of videoReadableStream) {
-      videoEncoder.encode(chunk);
-      chunk.close();
-    }
-  }
-
-  async function processAudio() {
-    const audioReadableStream = new MediaStreamTrackProcessor({
-      track: audioTrack,
-    }).readable;
-
-    for await (const chunk of audioReadableStream) {
-      audioEncoder.encode(chunk);
-      chunk.close();
-    }
-  }
-
-  // 并行处理视频和音频
-  Promise.all([processVideo(), processAudio()]).catch((error) => {
-    console.error("Stream processing error:", error);
-  });
+  const channel = new MessageChannel();
 
   flvWorker.postMessage({
     type: "START_RECORDING",
   });
+
+  async function encodeVideoMedia() {
+    videoReader.read().then(({ value }) => {
+      videoEncoder.encode(value);
+      value.close();
+      requestAnimationFrame(async () => {
+        encodeVideoMedia();
+      });
+    });
+  }
+
+  async function encodeAudioMedia() {
+    audioReader.read().then(({ value }) => {
+      audioEncoder.encode(value);
+      value.close();
+      requestAnimationFrame(async () => {
+        encodeAudioMedia();
+      });
+    });
+  }
 }
 
 async function stopRecording() {
@@ -106,11 +111,6 @@ async function stopRecording() {
     if (videoEncoder) {
       await videoEncoder.flush();
       videoEncoder.close();
-    }
-
-    if (audioEncoder) {
-      await audioEncoder.flush();
-      audioEncoder.close();
     }
 
     // Save the file

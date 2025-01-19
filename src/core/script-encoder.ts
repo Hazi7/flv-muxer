@@ -1,7 +1,7 @@
 import { AmfType } from "../constants/amf-type";
-import { BinaryWriter } from "../utils/binary-writer";
+import { BinaryWriter } from "./binary-writer";
 
-export class AmfEncoder extends BinaryWriter {
+export class ScriptEncoder extends BinaryWriter {
   /**
    * 将 Date 对象以 AMF 格式写入二进制流。
    * @param date - 要写入的 Date 对象。
