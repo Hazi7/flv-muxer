@@ -24,7 +24,13 @@ const writable = new WritableStream({
   },
 });
 
-const flvMuxer = new MyBundle.FlvStreamer(writable);
+const flvMuxer = new MyBundle.FlvStreamer(writable, {
+  video: 1920,
+  videocodecid: 7,
+  framerate: 30,
+  audio: true,
+  audiocodecid: 10,
+});
 
 const videoEncoder = new VideoEncoder({
   output: (chunk, metadata) => {

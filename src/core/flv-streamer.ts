@@ -1,4 +1,3 @@
-import console, { error } from "console";
 import { SoundFormat } from "../constants/audio-type";
 import { CodeId } from "../constants/video-type";
 import { FlvWriter } from "./flv-writer";
@@ -10,7 +9,7 @@ export interface MuxerOptions {
   framerate: number;
   audio: boolean;
   audiocodecid: SoundFormat;
-  stereo: boolean;
+  stereo: boolean
 }
 
 /**
