@@ -1,23 +1,23 @@
 # FlvMuxer
 
-`flv-muxer.js` 是一个纯TS编写的 `flv` 复用器，用于在 Web 平台实现原生 `flv` 推流/录屏。
+`flv-muxer.js` is a pure TypeScript-written FLV muxer used to implement native FLV streaming/recording on the Web platform.
 
-## 用例
+## Use Cases
 
-- 在 `Webtransport`、`Websocket`上实现 `flv`流传输到流媒体服务器，实现 Web 直播。
-- 用于支持 `MediaRecorder` API 不支持 `flv` 格式录制。
+- Implement FLV stream transmission to a streaming server over `WebTransport` and `WebSocket` for Web live streaming.
+- Support recording in FLV format where the `MediaRecorder` API does not support it.
 
-## 使用
+## Usage
 
-### 安装
+### Installation
 
-从 NPM 安装，输入以下命令：
+Install from NPM by running the following command:
 
 ```shell
 npm install flv-muxer
 ```
 
-从 CDN 链接下载：
+Download from CDN link:
 
 ```html
   <script src="../../dist/flv-muxer.iife.js"></script>
@@ -32,27 +32,27 @@ class FlvStreamer {
   constructor(writable: WritableStream<Uint8Array>, options?: MuxerOptions);
 
   /**
-   * 处理传入的视频块并将其写入FLV流。
-   * @param chunk - 要处理的视频块。
+   * Process incoming video chunks and write them to the FLV stream.
+   * @param chunk - The video chunk to process.
    */
   handleVideoChunk(chunk: EncodedVideoChunk, metadata?: EncodedVideoChunkMetadata): Promise<void>;
 
   /**
-   * 处理传入的音频块并将其写入FLV流。
-   * @param chunk - 要处理的音频块。
-   * @param metadata - 与音频块关联的可选元数据。
+   * Process incoming audio chunks and write them to the FLV stream.
+   * @param chunk - The audio chunk to process.
+   * @param metadata - Optional metadata associated with the audio chunk.
    */
   handleAudioChunk(chunk: EncodedAudioChunk, metadata?: EncodedAudioChunkMetadata): Promise<void>;
 
   /**
-   * 计算视频块的时间戳。
-   * @param timestamp - 块的原始时间戳。
-   * @returns 调整后的时间戳。
+   * Calculate the timestamp for a video chunk.
+   * @param timestamp - The original timestamp of the chunk.
+   * @returns The adjusted timestamp.
    */
   private calculateTimestamp;
 
   /**
-   * 关闭FLV流。
+   * Close the FLV stream.
    */
   close(): Promise<void>;
 }
