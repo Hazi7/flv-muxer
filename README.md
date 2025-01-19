@@ -71,8 +71,6 @@ async function getDisplayMedia() {
   });
 }
 
-let recordingChunks = [];
-
 const writable = new WritableStream({
   write: (chunk) => {
     // Stream to the streaming server
@@ -86,6 +84,7 @@ const flvMuxer = new MyBundle.FlvStreamer(writable, {
   framerate: 30,
   audio: true,
   audiocodecid: 10,
+  stereo: true,
 });
 
 function readAndEncode(reader, encoder) {

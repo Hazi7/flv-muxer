@@ -30,6 +30,7 @@ const flvMuxer = new MyBundle.FlvStreamer(writable, {
   framerate: 30,
   audio: true,
   audiocodecid: 10,
+  stereo: true,
 });
 
 const videoEncoder = new VideoEncoder({
