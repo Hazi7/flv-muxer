@@ -16,7 +16,7 @@ English | [中文](./README_CN.md)
 Install from NPM by running the following command:
 
 ```shell
-npm install flv-muxer
+  npm install flv-muxer
 ```
 
 Download from CDN link:
