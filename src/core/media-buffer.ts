@@ -1,9 +1,10 @@
 import { RingBuffer } from "./ring-buffer";
 
 export interface MediaChunk {
-  type: "video" | "audio";
-  data: Uint8Array | undefined;
+  type: "AAC_RAW" | "AAC_SE" | "AVC_SE" | "AVC_NALU";
+  data: Uint8Array;
   timestamp: number;
+  isKey: boolean;
 }
 
 export class MediaBuffer<T> extends RingBuffer<T> {

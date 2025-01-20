@@ -1,4 +1,5 @@
 declare class MediaStreamTrackProcessor {
-  constructor(options: MediaStreamTrackProcessorOptions);
-  readonly readable: ReadableStream<any>;
+  constructor(options: { track: MediaStreamTrack; maxBufferSize?: number });
+
+  readonly readable: ReadableStream;
 }

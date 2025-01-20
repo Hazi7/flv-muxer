@@ -3,20 +3,15 @@ async function getDisplayMedia() {
     video: {
       frameRate: {
         ideal: 30,
-        max: 30,
       },
       width: 1920,
       height: 1080,
     },
-    audio: {},
+    audio: true,
   });
 }
 
 let recordingChunks = [];
-
-function loadWorker() {
-  return new Worker("sw.js");
-}
 
 const writable = new WritableStream({
   write: (chunk) => {
@@ -24,12 +19,30 @@ const writable = new WritableStream({
   },
 });
 
-const flvMuxer = new MyBundle.FlvStreamer(writable);
-const videoHandler = flvMuxer.getVideoChunkHandler();
-const audioHandler = flvMuxer.getAudioChunkHandler();
+const flvMuxer = new MyBundle.FlvStreamer(writable, {
+  video: 1920,
+  videocodecid: 7,
+  framerate: 30,
+  audio: true,
+  audiocodecid: 10,
+  stereo: true,
+});
+
+function readAndEncode(reader, encoder) {
+  reader.read().then(({ done, value }) => {
+    if (done) return;
+
+    encoder.encode(value);
+    value.close();
+
+    readAndEncode(reader, encoder);
+  });
+}
 
 const videoEncoder = new VideoEncoder({
-  output: videoHandler,
+  output: (chunk, metadata) => {
+    flvMuxer.handleVideoChunk(chunk, metadata);
+  },
   error: (error) => {
     // 处理编码过程中的错误
     console.error("VideoEncoder error:", error);
@@ -43,7 +56,10 @@ videoEncoder.configure({
 });
 
 const audioEncoder = new AudioEncoder({
-  output: audioHandler,
+  output: (chunk, metadata) => {
+    console.log(chunk.timestamp);
+    flvMuxer.handleAudioChunk(chunk, metadata);
+  },
   error: (error) => {
     // 处理编码过程中的错误
     console.error("VideoEncoder error:", error);
@@ -57,60 +73,34 @@ audioEncoder.configure({
   bitrate: 128000,
 });
 
-async function startRecoding() {
+async function startRecording() {
   const stream = await getDisplayMedia();
-  const flvWorker = loadWorker();
 
   const videoTrack = stream.getVideoTracks()[0];
-  const audioTrack = stream.getAudioTracks()[0];
-
   const videoReader = await new MediaStreamTrackProcessor({
     track: videoTrack,
   }).readable.getReader();
 
+  readAndEncode(videoReader, videoEncoder);
+
+  const audioTrack = stream.getAudioTracks()[0];
   const audioReader = await new MediaStreamTrackProcessor({
     track: audioTrack,
   }).readable.getReader();
 
-  flvMuxer.start();
-  encodeAudioMedia();
-  encodeVideoMedia();
-
-  const channel = new MessageChannel();
-
-  flvWorker.postMessage({
-    type: "START_RECORDING",
-  });
-
-  async function encodeVideoMedia() {
-    videoReader.read().then(({ value }) => {
-      videoEncoder.encode(value);
-      value.close();
-      requestAnimationFrame(async () => {
-        encodeVideoMedia();
-      });
-    });
-  }
-
-  async function encodeAudioMedia() {
-    audioReader.read().then(({ value }) => {
-      audioEncoder.encode(value);
-      value.close();
-      requestAnimationFrame(async () => {
-        encodeAudioMedia();
-      });
-    });
-  }
+  readAndEncode(audioReader, audioEncoder);
 }
 
 async function stopRecording() {
   try {
-    // Stop all tracks
-
-    // Close encoder
     if (videoEncoder) {
       await videoEncoder.flush();
       videoEncoder.close();
+    }
+
+    if (audioEncoder) {
+      await audioEncoder.flush();
+      audioEncoder.close();
     }
 
     // Save the file

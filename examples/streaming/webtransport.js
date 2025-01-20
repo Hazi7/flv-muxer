@@ -1,11 +1,9 @@
-import { FlvStreamer } from "../core/flv-streamer";
-
 const startButton = document.querySelector("#startButton");
 startButton?.addEventListener("click", () => {
   testVideo();
 });
 
-async function initTransport(url: string) {
+async function initTransport(url) {
   const HASH = new Uint8Array([
     191, 133, 5, 2, 221, 239, 186, 120, 185, 64, 220, 189, 171, 219, 252, 32,
     129, 78, 247, 211, 132, 75, 157, 219, 171, 59, 85, 85, 182, 193, 67, 10,
@@ -20,7 +18,7 @@ async function initTransport(url: string) {
   return transport;
 }
 
-async function closeTransport(transport: WebTransport) {
+async function closeTransport(transport) {
   // 响应连接的关闭
   try {
     await transport.closed;
@@ -30,7 +28,7 @@ async function closeTransport(transport: WebTransport) {
   }
 }
 
-async function useTransport(url: string) {
+async function useTransport(url) {
   const transport = await initTransport(url);
 
   return transport;
@@ -42,7 +40,7 @@ export async function testVideo() {
   const transport = await useTransport(url);
 
   const writableStream =
-    (await transport.createUnidirectionalStream()) as unknown as WritableStream<Uint8Array>;
+    (await transport.createUnidirectionalStream()) /* as unknown as WritableStream<Uint8Array> */;
 
   const flvStreamer = new FlvStreamer(writableStream);
 
@@ -69,7 +67,7 @@ export async function testVideo() {
       codec: "avc1.42E01F",
       width: 1280,
       height: 720,
-      bitrate: 1_000_000,
+      bitrate: 1000000,
       framerate: 30,
     });
 
@@ -88,9 +86,7 @@ export async function testVideo() {
         timer = performance.now();
         videoEncoder.encode(frame, { keyFrame: true });
       } else {
-        {
-          videoEncoder.encode(frame, { keyFrame: false });
-        }
+        videoEncoder.encode(frame, { keyFrame: false });
       }
       frame.close();
     }

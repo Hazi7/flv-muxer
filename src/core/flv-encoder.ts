@@ -39,7 +39,7 @@ type AudioTagParams<T extends keyof typeof SoundFormat> = {
  * 用于编写 FLV（Flash Video）文件的类。
  * @extends ScriptEncoder
  */
-export class FlvWriter extends ScriptEncoder {
+export class FlvEncoder extends ScriptEncoder {
   /**
    * 构造一个新的 FlvWriter 实例。
    */
@@ -58,25 +58,25 @@ export class FlvWriter extends ScriptEncoder {
     hasAudio: boolean = true
   ): Uint8Array {
     // 重置写入器
-    this.reset();
+    this.writer.reset();
 
     // FLV 签名，分别为 "F"、"L"、"V" 的 ASCII 值
-    this.writeString("FLV");
+    this.writer.writeString("FLV");
 
     // 设置 FLV 文件版本为 1
-    this.writeUint8(1);
+    this.writer.writeUint8(1);
 
     // 流标志位 (5位保留 + 1位音频 + 1位保留 + 1位视频)
     const flag = (hasAudio ? 0x04 : 0) | (hasVideo ? 0x01 : 0);
-    this.writeUint8(flag);
+    this.writer.writeUint8(flag);
 
     // 数据部分长度，这里固定为 9 字节
-    this.writeUint32(9);
+    this.writer.writeUint32(9);
 
     // 结束标志前4个字节是前一个 Tag 的大小
-    this.writeUint32(0);
+    this.writer.writeUint32(0);
 
-    return this.getBytes();
+    return this.writer.getBytes();
   }
 
   /**
@@ -95,31 +95,31 @@ export class FlvWriter extends ScriptEncoder {
   ): Uint8Array {
     const dataSize = header.byteLength + data.byteLength;
 
-    this.reset();
+    this.writer.reset();
 
-    this.writeUint8(TagType[type]);
+    this.writer.writeUint8(TagType[type]);
 
     // 设置 DataSize(tag大小 - 11)
-    this.writeUint24(dataSize);
+    this.writer.writeUint24(dataSize);
 
     // 设置时间戳
-    this.writeUint24(timestamp & 0xffffff);
-    this.writeUint8((timestamp >> 24) & 0xff); // 拓展位
+    this.writer.writeUint24(timestamp & 0xffffff);
+    this.writer.writeUint8((timestamp >> 24) & 0xff); // 拓展位
 
     // 设置 StreamID，总是0
-    this.writeUint24(0);
+    this.writer.writeUint24(0);
 
     // 写入标签头部
-    this.writeBytes(header);
+    this.writer.writeBytes(header);
 
     // 写入标签数据
-    this.writeBytes(data);
+    this.writer.writeBytes(data);
 
     // 写入前一个标签大小(4字节)
     // 标签大小 = 标签头(11) + 数据大小(dataSize)
-    this.writeUint32(11 + dataSize);
+    this.writer.writeUint32(11 + dataSize);
 
-    return this.getBytes();
+    return this.writer.getBytes();
   }
 
   /**
@@ -128,7 +128,7 @@ export class FlvWriter extends ScriptEncoder {
    * @returns {Uint8Array} - 作为 Uint8Array 的脚本数据标签。
    */
   createScriptDataTag(metadata: Record<string, any>): Uint8Array {
-    this.reset();
+    this.writer.reset();
 
     this.writeScriptDataValue("onMetaData");
     this.writeScriptDataValue(metadata);
@@ -138,7 +138,7 @@ export class FlvWriter extends ScriptEncoder {
       "ScriptData",
       new Uint8Array(0),
       0,
-      this.getBytes()
+      this.writer.getBytes()
     );
     return scriptTag;
   }
