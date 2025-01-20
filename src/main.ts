@@ -1,1 +1,1 @@
-export { MediaProcessor as FlvStreamer } from "./core/media-processor";
+export { FlvMuxer } from "./core/flv-muxer";
