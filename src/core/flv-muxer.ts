@@ -21,7 +21,6 @@ export class FlvMuxer {
   private transform: TransformStream | null = null;
   private writable: WritableStream | null = null;
   private readonly options;
-  private readonly writer: WritableStreamDefaultWriter<Uint8Array>;
 
   constructor(
     writable: WritableStream<Uint8Array>,
@@ -30,11 +29,7 @@ export class FlvMuxer {
     options: MuxerOptions
   ) {
     this.writable = writable;
-    this.writer = writable.getWriter();
     this.options = options;
-
-    this.encoder = new FlvEncoder();
-    this.processor = new MediaProcessor(audioTrack, videoTrack, options);
 
     // 初始化策略
     this.strategies["AAC_RAW"] = new AACRawStrategy();
@@ -42,28 +37,11 @@ export class FlvMuxer {
     this.strategies["AVC_SE"] = new AVCSEStrategy();
     this.strategies["AVC_NALU"] = new AVCNALUStrategy();
 
+    this.encoder = new FlvEncoder();
+    this.processor = new MediaProcessor(audioTrack, videoTrack, options);
+
     // 初始化转换流
     this.initTransform();
-  }
-
-  private initTransform() {
-    let muxer = this;
-
-    this.transform = new TransformStream({
-      async start() {
-        const header = muxer.encoder.createFlvHeader(
-          !!muxer.options.video,
-          !!muxer.options.audio
-        );
-        await muxer.writer.write(header);
-        await muxer.writeMetadata();
-        muxer.processor.start();
-      },
-      transform(chunk, controller) {
-        const tag = muxer.processChunk(chunk);
-        controller.enqueue(tag);
-      },
-    });
   }
 
   async start() {
@@ -83,7 +61,7 @@ export class FlvMuxer {
   /**
    * 将元数据写入FLV流。
    */
-  private async writeMetadata() {
+  private encodeMetadata() {
     try {
       const metadata: Record<string, any> = {
         duration: 0,
@@ -109,16 +87,43 @@ export class FlvMuxer {
       }
 
       const scriptData = this.encoder.createScriptDataTag(metadata);
-      await this.writer.write(scriptData);
+
+      return scriptData;
     } catch (error) {
       console.error(`Failed to write metadata: ${error}`);
     }
   }
 
+  private initTransform() {
+    let muxer = this;
+
+    this.transform = new TransformStream({
+      async start(controller) {
+        const header = muxer.encoder.createFlvHeader(
+          !!muxer.options.video,
+          !!muxer.options.audio
+        );
+        const metadata = muxer.encodeMetadata();
+        controller.enqueue(header);
+        controller.enqueue(metadata);
+
+        muxer.processor.start();
+      },
+      transform(chunk, controller) {
+        const tag = muxer.processChunk(chunk);
+        controller.enqueue(tag);
+      },
+    });
+  }
+
   private processChunk(chunk: MediaChunk) {
+    if (!chunk) return;
+
     const strategy = this.strategies[chunk.type];
     if (strategy) {
-      strategy.process(chunk, this.encoder);
+      return strategy.process(chunk, this.encoder);
     }
+
+    return;
   }
 }

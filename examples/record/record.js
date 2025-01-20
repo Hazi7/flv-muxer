@@ -25,7 +25,7 @@ async function startRecording() {
   const videoTrack = stream.getVideoTracks()[0];
   const audioTrack = stream.getAudioTracks()[0];
 
-  const flvMuxer = new MyBundle.FlvStreamer(writable, audioTrack, videoTrack, {
+  const flvMuxer = new MyBundle.FlvMuxer(writable, audioTrack, videoTrack, {
     video: {
       codec: "avc1.640034",
       width: 1920,

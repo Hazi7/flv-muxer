@@ -74,6 +74,8 @@ export class MediaProcessor {
   }
 
   async start() {
+    let mediaProcessor = this;
+
     if (this.audioReadableStream && this.audioEncoder) {
       this.processAudio();
     }
@@ -82,13 +84,13 @@ export class MediaProcessor {
       this.processVideo();
     }
 
-    let mediaProcessor = this;
-
     this.outputReadableStream = new ReadableStream({
-      start() {},
-      pull() {
-        mediaProcessor.buffer.getNextChunk();
+      start(controller) {
+        mediaProcessor.buffer.subscribe((data) => {
+          controller.enqueue(data);
+        });
       },
+      cancel() {},
     });
   }
 
@@ -110,65 +112,29 @@ export class MediaProcessor {
     if (!this.audioReadableStream || !this.audioEncoder) return;
 
     const reader = this.audioReadableStream.getReader();
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) return;
-
-        this.audioEncoder.encode(value);
-        value.close();
-      }
-    } finally {
-      reader.releaseLock();
-    }
+    this.readAndEncode(reader, this.audioEncoder);
   }
 
   private async processVideo() {
     if (!this.videoReadableStream || !this.videoEncoder) return;
 
     const reader = this.videoReadableStream.getReader();
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) return;
 
-        this.videoEncoder.encode(value);
-        value.close();
-      }
-    } finally {
-      reader.releaseLock();
-    }
+    this.readAndEncode(reader, this.videoEncoder);
   }
 
-  /**
-   * 处理传入的视频块并将其写入FLV流。
-   * @param chunk - 要处理的视频块。
-   */
-  private async handleVideoChunk(
-    chunk: EncodedVideoChunk,
-    metadata?: EncodedVideoChunkMetadata
+  readAndEncode(
+    reader: ReadableStreamDefaultReader,
+    encoder: VideoEncoder | AudioEncoder
   ) {
-    try {
-      // 添加视频元数据到缓冲区
-      if (metadata?.decoderConfig?.description) {
-        this._videoDecoderConfig = metadata.decoderConfig;
-      }
+    reader.read().then((result) => {
+      if (result.done) return;
 
-      // 将 EncodedVideoChunk 转为 Uint8Array
-      const data = new Uint8Array(chunk.byteLength);
-      chunk.copyTo(data);
+      encoder.encode(result.value);
+      result.value.close();
 
-      // 添加视频数据到缓冲区
-      const timestamp = this.calculateTimestamp(chunk.timestamp);
-      this.buffer.addChunk({
-        type: "AVC_NALU",
-        data,
-        timestamp,
-        isKey: chunk.type === "key",
-      });
-    } catch (error) {
-      console.error(`Failed to handle video chunk: ${error}`);
-    }
+      this.readAndEncode(reader, encoder);
+    });
   }
 
   /**
@@ -200,6 +166,37 @@ export class MediaProcessor {
       });
     } catch (error) {
       console.error(`Failed to handle audio chunk: ${error}`);
+    }
+  }
+
+  /**
+   * 处理传入的视频块并将其写入FLV流。
+   * @param chunk - 要处理的视频块。
+   */
+  private async handleVideoChunk(
+    chunk: EncodedVideoChunk,
+    metadata?: EncodedVideoChunkMetadata
+  ) {
+    try {
+      // 添加视频元数据到缓冲区
+      if (metadata?.decoderConfig?.description) {
+        this.videoDecoderConfig = metadata.decoderConfig;
+      }
+
+      // 将 EncodedVideoChunk 转为 Uint8Array
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+
+      // 添加视频数据到缓冲区
+      const timestamp = this.calculateTimestamp(chunk.timestamp);
+      this.buffer.addChunk({
+        type: "AVC_NALU",
+        data,
+        timestamp,
+        isKey: chunk.type === "key",
+      });
+    } catch (error) {
+      console.error(`Failed to handle video chunk: ${error}`);
     }
   }
 
