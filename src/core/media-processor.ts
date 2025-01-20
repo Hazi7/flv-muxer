@@ -252,11 +252,10 @@ export class MediaProcessor {
     audioTrack: MediaStreamTrack,
     videoTrack: MediaStreamTrack
   ) {
-    if (this.audioReadableStream) {
-      this.audioReadableStream = new MediaStreamTrackProcessor({
-        track: audioTrack,
-      }).readable;
-    }
+    this.audioReadableStream = new MediaStreamTrackProcessor({
+      track: audioTrack,
+    }).readable;
+
     this.videoReadableStream = new MediaStreamTrackProcessor({
       track: videoTrack,
     }).readable;
