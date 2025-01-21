@@ -1,5 +1,5 @@
 import type { MuxerOptions } from "./flv-muxer";
-import { MediaBuffer, type MediaChunk } from "./media-buffer";
+import { MediaBuffer } from "./media-buffer";
 
 /**
  * 用于将FLV数据流式传输到可写流的类。
@@ -13,7 +13,6 @@ export class MediaProcessor {
   private audioEncoder: AudioEncoder | null = null;
   private videoEncoder: VideoEncoder | null = null;
   private baseTimestamp: number | null = null;
-  private lastVideoFrame: VideoFrame | null = null;
   private frameCount: number = 0;
   private _audioDecConfig: AudioDecoderConfig | null = null;
   private _videoDecConfig: VideoDecoderConfig | null = null;
