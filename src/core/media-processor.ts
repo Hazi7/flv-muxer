@@ -1,12 +1,12 @@
 import type { MuxerOptions } from "./flv-muxer";
-import { MediaBuffer } from "./media-buffer";
+import { MediaHub } from "./media-hub";
 
 /**
  * 用于将FLV数据流式传输到可写流的类。
  */
 export class MediaProcessor {
   private readonly options: MuxerOptions;
-  private readonly buffer: MediaBuffer;
+  private readonly buffer: MediaHub;
   private audioStream: ReadableStream | null = null;
   private videoStream: ReadableStream | null = null;
   private outputStream: ReadableStream | null = null;
@@ -64,7 +64,7 @@ export class MediaProcessor {
     }
 
     this.options = options;
-    this.buffer = new MediaBuffer();
+    this.buffer = new MediaHub();
 
     // 初始化编码器
     this.initEncoder();
@@ -97,6 +97,7 @@ export class MediaProcessor {
         new WritableStream({
           write: (frame) => {
             if (this.videoEncoder) {
+              // 当编码器不过载时候才处理帧，否则丢弃当前帧
               if (this.videoEncoder.encodeQueueSize < 2) {
                 this.frameCount++;
                 this.videoEncoder.encode(frame, {

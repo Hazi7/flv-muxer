@@ -9,13 +9,16 @@ export interface MediaChunk {
   isKey: boolean;
 }
 
-export class MediaBuffer extends RingBuffer<MediaChunk> {
+export class MediaHub {
   private subs: (() => void)[] = [];
+  private audioBuffer: RingBuffer<MediaChunk>;
+  private videoBuffer: RingBuffer<MediaChunk>;
   private timer: any | null = null;
   private lastChunk: MediaChunk | null = null;
 
   constructor() {
-    super(512);
+    this.audioBuffer = new RingBuffer(16);
+    this.videoBuffer = new RingBuffer(16);
   }
 
   subscribe(callback: () => void) {
@@ -30,7 +33,13 @@ export class MediaBuffer extends RingBuffer<MediaChunk> {
   }
 
   addChunk(chunk: MediaChunk) {
-    this.enqueue(chunk);
+    if (chunk.type === "AAC_RAW" || chunk.type === "AAC_SE") {
+      this.audioBuffer.enqueue(chunk);
+    } else if (chunk.type === "AVC_NALU" || chunk.type === "AVC_SE") {
+      this.videoBuffer.enqueue(chunk);
+    } else {
+      throw new Error("未知类型的媒体包");
+    }
     // this.lastChunk = chunk;
     this.notifySubs();
 
@@ -50,12 +59,13 @@ export class MediaBuffer extends RingBuffer<MediaChunk> {
     this.subs.forEach((callback) => callback());
   }
 
-  getNextChunk() {
-    return this.dequeue();
+  private async flush() {
+    
   }
 
+  getNextChunk() {}
+
   clear() {
-    super.clear();
     this.subs = [];
   }
 }

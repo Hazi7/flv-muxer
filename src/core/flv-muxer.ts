@@ -6,7 +6,7 @@ import {
   AVCNALUStrategy,
 } from "../strategies/mux-strategy";
 import { FlvEncoder } from "./flv-encoder";
-import type { MediaChunk } from "./media-buffer";
+import type { MediaChunk } from "./media-hub";
 import { MediaProcessor } from "./media-processor";
 
 export interface MuxerOptions {
