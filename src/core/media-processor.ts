@@ -70,27 +70,31 @@ export class MediaProcessor {
     // 初始化编码器
     this.initEncoder();
 
-    // TODO 判断如果不是对应轨道
     // 初始化媒体处理器
     this.initProcessor(audioTrack, videoTrack);
   }
 
   async start() {
-    if (this.audioStream && this.audioEncoder) {
-      this.readAndEncode(this.audioStream.getReader(), this.audioEncoder);
+    // 存存在音频轨道，进行编码
+    if (this.audioStream) {
+      const reader = this.audioStream.getReader();
+      this.encodeVideoChunk(reader, this.audioEncoder);
     }
 
-    if (this.videoStream && this.videoEncoder) {
-      this.readAndEncode(this.videoStream.getReader(), this.videoEncoder);
+    // 如存在视频轨道，进行编码
+    if (this.videoStream) {
+      const reader = this.videoStream.getReader();
+      this.encodeAudioChunk(reader, this.videoEncoder);
     }
 
+    // 创建输出流
     this.outputStream = new ReadableStream({
       start: (controller) => {
         this.buffer.subscribe((data) => {
           controller.enqueue(data);
         });
       },
-      cancel() {},
+      cancel: () => {},
     });
   }
 
@@ -108,21 +112,43 @@ export class MediaProcessor {
     }
   }
 
-  readAndEncode(
+  private encodeVideoChunk(
     reader: ReadableStreamDefaultReader,
-    encoder: VideoEncoder | AudioEncoder
+    encoder: VideoEncoder | AudioEncoder | null
   ) {
+    if (!reader || !encoder) return;
+
     reader.read().then(({ value, done }) => {
       if (done) return;
 
-      // 当编码器不过载时候处理帧，否则丢弃当前帧
+      // 当编码器不过载时候才处理帧，否则丢弃当前帧
       if (encoder.encodeQueueSize < 2) {
         this.frameCount++;
+        this.lastVideoFrame = value;
         encoder.encode(value, { keyFrame: this.frameCount % 150 === 0 });
       }
       value.close();
 
-      this.readAndEncode(reader, encoder);
+      this.encodeVideoChunk(reader, encoder);
+    });
+  }
+
+  private encodeAudioChunk(
+    reader: ReadableStreamDefaultReader,
+    encoder: VideoEncoder | AudioEncoder | null
+  ) {
+    if (!reader || !encoder) return;
+
+    reader.read().then(({ value, done }) => {
+      if (done) return;
+
+      // 当编码器不过载时候才处理帧，否则丢弃当前帧
+      if (encoder.encodeQueueSize < 2) {
+        encoder.encode(value);
+      }
+      value.close();
+
+      this.encodeAudioChunk(reader, encoder);
     });
   }
 
@@ -136,7 +162,7 @@ export class MediaProcessor {
     metadata?: EncodedAudioChunkMetadata
   ) {
     try {
-      // 如果是关键帧，则更新音频解码器配置
+      // 如果是关键帧，则添加音频解码器配置
       if (metadata?.decoderConfig?.description) {
         this.audioDecConfig = metadata.decoderConfig;
       }
