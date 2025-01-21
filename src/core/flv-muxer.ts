@@ -1,10 +1,10 @@
 import {
-  type MediaChunkStrategy,
+  type MuxStrategy,
   AACRawStrategy,
   AACSEStrategy,
   AVCSEStrategy,
   AVCNALUStrategy,
-} from "../strategies/buffer-strategy";
+} from "../strategies/mux-strategy";
 import { FlvEncoder } from "./flv-encoder";
 import type { MediaChunk } from "./media-buffer";
 import { MediaProcessor } from "./media-processor";
@@ -15,12 +15,12 @@ export interface MuxerOptions {
 }
 
 export class FlvMuxer {
-  private readonly strategies: { [key: string]: MediaChunkStrategy } = {};
+  private readonly strategies: { [key: string]: MuxStrategy } = {};
+  private readonly options;
   private processor: MediaProcessor;
   private encoder: FlvEncoder;
   private transform: TransformStream | null = null;
   private writable: WritableStream | null = null;
-  private readonly options;
 
   constructor(
     writable: WritableStream<Uint8Array>,
@@ -30,15 +30,11 @@ export class FlvMuxer {
   ) {
     this.writable = writable;
     this.options = options;
-
-    // 初始化策略
-    this.strategies["AAC_RAW"] = new AACRawStrategy();
-    this.strategies["AAC_SE"] = new AACSEStrategy();
-    this.strategies["AVC_SE"] = new AVCSEStrategy();
-    this.strategies["AVC_NALU"] = new AVCNALUStrategy();
-
     this.encoder = new FlvEncoder();
     this.processor = new MediaProcessor(audioTrack, videoTrack, options);
+
+    // 初始化策略
+    this.initStrategies();
 
     // 初始化转换流
     this.initTransform();
@@ -86,7 +82,7 @@ export class FlvMuxer {
         });
       }
 
-      const scriptData = this.encoder.createScriptDataTag(metadata);
+      const scriptData = this.encoder.encodeScriptDataTag(metadata);
 
       return scriptData;
     } catch (error) {
@@ -94,12 +90,30 @@ export class FlvMuxer {
     }
   }
 
+  private muxChunk(chunk: MediaChunk) {
+    if (!chunk) return;
+
+    const strategy = this.strategies[chunk.type];
+    if (strategy) {
+      return strategy.process(chunk, this.encoder);
+    }
+
+    return;
+  }
+
+  private initStrategies() {
+    this.strategies["AAC_RAW"] = new AACRawStrategy();
+    this.strategies["AAC_SE"] = new AACSEStrategy();
+    this.strategies["AVC_SE"] = new AVCSEStrategy();
+    this.strategies["AVC_NALU"] = new AVCNALUStrategy();
+  }
+
   private initTransform() {
     let muxer = this;
 
     this.transform = new TransformStream({
       async start(controller) {
-        const header = muxer.encoder.createFlvHeader(
+        const header = muxer.encoder.encodeFlvHeader(
           !!muxer.options.video,
           !!muxer.options.audio
         );
@@ -110,20 +124,9 @@ export class FlvMuxer {
         muxer.processor.start();
       },
       transform(chunk, controller) {
-        const tag = muxer.processChunk(chunk);
+        const tag = muxer.muxChunk(chunk);
         controller.enqueue(tag);
       },
     });
-  }
-
-  private processChunk(chunk: MediaChunk) {
-    if (!chunk) return;
-
-    const strategy = this.strategies[chunk.type];
-    if (strategy) {
-      return strategy.process(chunk, this.encoder);
-    }
-
-    return;
   }
 }

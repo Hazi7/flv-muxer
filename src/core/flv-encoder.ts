@@ -53,7 +53,7 @@ export class FlvEncoder extends ScriptEncoder {
    * @param {boolean} [hasAudio=true] - 表示 FLV 文件是否包含音频。
    * @returns {Uint8Array} - 作为 Uint8Array 的 FLV 文件头。
    */
-  createFlvHeader(
+  encodeFlvHeader(
     hasVideo: boolean = true,
     hasAudio: boolean = true
   ): Uint8Array {
@@ -87,7 +87,7 @@ export class FlvEncoder extends ScriptEncoder {
    * @param {Uint8Array} data - 标签的数据。
    * @returns {Uint8Array} - 作为 Uint8Array 的 FLV 标签。
    */
-  createFlvTag(
+  encodeFlvTag(
     type: keyof typeof TagType,
     header: Uint8Array,
     timestamp: number,
@@ -127,14 +127,14 @@ export class FlvEncoder extends ScriptEncoder {
    * @param {Record<string, any>} metadata - 要包含在脚本数据标签中的元数据。
    * @returns {Uint8Array} - 作为 Uint8Array 的脚本数据标签。
    */
-  createScriptDataTag(metadata: Record<string, any>): Uint8Array {
+  encodeScriptDataTag(metadata: Record<string, any>): Uint8Array {
     this.writer.reset();
 
     this.writeScriptDataValue("onMetaData");
     this.writeScriptDataValue(metadata);
 
     // 创建 ScriptTag
-    const scriptTag = this.createFlvTag(
+    const scriptTag = this.encodeFlvTag(
       "ScriptData",
       new Uint8Array(0),
       0,
@@ -144,43 +144,12 @@ export class FlvEncoder extends ScriptEncoder {
   }
 
   /**
-   * 创建一个视频标签。
-   * @param {keyof typeof FrameType} frameType - 视频帧的类型。
-   * @param {keyof typeof CodeId} codecId - 视频的编解码器 ID。
-   * @param {keyof typeof AvcPacketType} avcPacketType - AVC 数据包类型。
-   * @param {number} compositionTime - 视频帧的合成时间。
-   * @param {number} timestamp - 视频帧的时间戳。
-   * @param {Uint8Array} videoBody - 视频帧数据。
-   * @returns {Uint8Array} - 作为 Uint8Array 的视频标签。
-   */
-  createVideoTag(
-    frameType: keyof typeof FrameType,
-    codecId: keyof typeof CodeId,
-    avcPacketType: keyof typeof AvcPacketType,
-    compositionTime: number,
-    timestamp: number,
-    videoBody: Uint8Array
-  ): Uint8Array {
-    const header = new Uint8Array(5);
-
-    header[0] = (FrameType[frameType] << 4) | CodeId[codecId];
-
-    header[1] = AvcPacketType[avcPacketType];
-
-    header[2] = (compositionTime >> 16) & 0xff;
-    header[3] = (compositionTime >> 8) & 0xff;
-    header[4] = compositionTime & 0xff;
-
-    return this.createFlvTag("Video", header, timestamp, videoBody);
-  }
-
-  /**
    * 创建一个音频标签。
    * @template T - 音频格式类型。
    * @param {AudioTagParams<T>} params - 音频标签的参数。
    * @returns {Uint8Array | undefined} - 作为 Uint8Array 的音频标签，如果 soundFormat 是 "AAC" 且未提供 audioData 则返回 undefined。
    */
-  createAudioTag<T extends keyof typeof SoundFormat>(
+  encodeAudioTag<T extends keyof typeof SoundFormat>(
     params: AudioTagParams<T>
   ): Uint8Array | undefined {
     const {
@@ -204,7 +173,38 @@ export class FlvEncoder extends ScriptEncoder {
         firstByte,
         AACPacketType[params.aacPacketType],
       ]);
-      return this.createFlvTag("Audio", header, timestamp, audioData);
+      return this.encodeFlvTag("Audio", header, timestamp, audioData);
     }
+  }
+
+  /**
+   * 创建一个视频标签。
+   * @param {keyof typeof FrameType} frameType - 视频帧的类型。
+   * @param {keyof typeof CodeId} codecId - 视频的编解码器 ID。
+   * @param {keyof typeof AvcPacketType} avcPacketType - AVC 数据包类型。
+   * @param {number} compositionTime - 视频帧的合成时间。
+   * @param {number} timestamp - 视频帧的时间戳。
+   * @param {Uint8Array} videoBody - 视频帧数据。
+   * @returns {Uint8Array} - 作为 Uint8Array 的视频标签。
+   */
+  encodeVideoTag(
+    frameType: keyof typeof FrameType,
+    codecId: keyof typeof CodeId,
+    avcPacketType: keyof typeof AvcPacketType,
+    compositionTime: number,
+    timestamp: number,
+    videoBody: Uint8Array
+  ): Uint8Array {
+    const header = new Uint8Array(5);
+
+    header[0] = (FrameType[frameType] << 4) | CodeId[codecId];
+
+    header[1] = AvcPacketType[avcPacketType];
+
+    header[2] = (compositionTime >> 16) & 0xff;
+    header[3] = (compositionTime >> 8) & 0xff;
+    header[4] = compositionTime & 0xff;
+
+    return this.encodeFlvTag("Video", header, timestamp, videoBody);
   }
 }

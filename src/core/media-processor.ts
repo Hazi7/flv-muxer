@@ -7,22 +7,22 @@ import { MediaBuffer, type MediaChunk } from "./media-buffer";
 export class MediaProcessor {
   private readonly options: MuxerOptions;
   private readonly buffer: MediaBuffer<MediaChunk>;
-  private audioReadableStream: ReadableStream | null = null;
-  private videoReadableStream: ReadableStream | null = null;
-  private outputReadableStream: ReadableStream | null = null;
-  private audioEncoder: AudioEncoder | null = null;
-  private videoEncoder: VideoEncoder | null = null;
+  private aStream: ReadableStream | null = null;
+  private vStream: ReadableStream | null = null;
+  private oStream: ReadableStream | null = null;
+  private aEncoder: AudioEncoder | null = null;
+  private vEncoder: VideoEncoder | null = null;
   private baseTimestamp: number | null = null;
-  private _audioDecoderConfig: AudioDecoderConfig | null = null;
-  private _videoDecoderConfig: VideoDecoderConfig | null = null;
+  private _aDecConfig: AudioDecoderConfig | null = null;
+  private _vDecConfig: VideoDecoderConfig | null = null;
 
-  get audioDecoderConfig(): AudioDecoderConfig | null {
-    return this._audioDecoderConfig;
+  get aDecConfig(): AudioDecoderConfig | null {
+    return this._aDecConfig;
   }
 
-  set audioDecoderConfig(config: AudioDecoderConfig) {
-    if (this._audioDecoderConfig) return;
-    this._audioDecoderConfig = config;
+  set aDecConfig(config: AudioDecoderConfig) {
+    if (this._aDecConfig) return;
+    this._aDecConfig = config;
 
     this.buffer.addChunk({
       type: "AAC_SE",
@@ -32,13 +32,13 @@ export class MediaProcessor {
     });
   }
 
-  get videoDecoderConfig(): VideoDecoderConfig | null {
-    return this._videoDecoderConfig;
+  get vDecConfig(): VideoDecoderConfig | null {
+    return this._vDecConfig;
   }
 
-  set videoDecoderConfig(config: VideoDecoderConfig) {
-    if (this._videoDecoderConfig) return;
-    this._videoDecoderConfig = config;
+  set vDecConfig(config: VideoDecoderConfig) {
+    if (this._vDecConfig) return;
+    this._vDecConfig = config;
 
     this.buffer.addChunk({
       type: "AVC_SE",
@@ -74,17 +74,16 @@ export class MediaProcessor {
   }
 
   async start() {
-    let mediaProcessor = this;
-
-    if (this.audioReadableStream && this.audioEncoder) {
-      this.processAudio();
+    if (this.aStream && this.aEncoder) {
+      this.readAndEncode(this.aStream.getReader(), this.aEncoder);
     }
 
-    if (this.videoReadableStream && this.videoEncoder) {
-      this.processVideo();
+    if (this.vStream && this.vEncoder) {
+      this.readAndEncode(this.vStream.getReader(), this.vEncoder);
     }
 
-    this.outputReadableStream = new ReadableStream({
+    const mediaProcessor = this;
+    this.oStream = new ReadableStream({
       start(controller) {
         mediaProcessor.buffer.subscribe((data) => {
           controller.enqueue(data);
@@ -95,7 +94,7 @@ export class MediaProcessor {
   }
 
   getOutputStream() {
-    return this.outputReadableStream;
+    return this.oStream;
   }
 
   /**
@@ -106,21 +105,6 @@ export class MediaProcessor {
     } catch (error) {
       console.error(`Failed to close writer: ${error}`);
     }
-  }
-
-  private async processAudio() {
-    if (!this.audioReadableStream || !this.audioEncoder) return;
-
-    const reader = this.audioReadableStream.getReader();
-    this.readAndEncode(reader, this.audioEncoder);
-  }
-
-  private async processVideo() {
-    if (!this.videoReadableStream || !this.videoEncoder) return;
-
-    const reader = this.videoReadableStream.getReader();
-
-    this.readAndEncode(reader, this.videoEncoder);
   }
 
   readAndEncode(
@@ -149,7 +133,7 @@ export class MediaProcessor {
     try {
       // 如果是关键帧，则更新音频解码器配置
       if (metadata?.decoderConfig?.description) {
-        this.audioDecoderConfig = metadata.decoderConfig;
+        this.aDecConfig = metadata.decoderConfig;
       }
 
       // 将 EncodedAudioChunk 转为 Uint8Array
@@ -180,7 +164,7 @@ export class MediaProcessor {
     try {
       // 添加视频元数据到缓冲区
       if (metadata?.decoderConfig?.description) {
-        this.videoDecoderConfig = metadata.decoderConfig;
+        this.vDecConfig = metadata.decoderConfig;
       }
 
       // 将 EncodedVideoChunk 转为 Uint8Array
@@ -214,7 +198,7 @@ export class MediaProcessor {
   }
 
   private initEncoder() {
-    this.audioEncoder = new AudioEncoder({
+    this.aEncoder = new AudioEncoder({
       output: (chunk, metadata) => {
         this.handleAudioChunk(chunk, metadata);
       },
@@ -224,12 +208,12 @@ export class MediaProcessor {
     });
 
     try {
-      this.options.audio && this.audioEncoder.configure(this.options.audio);
+      this.options.audio && this.aEncoder.configure(this.options.audio);
     } catch (e) {
       console.error(e);
     }
 
-    this.videoEncoder = new VideoEncoder({
+    this.vEncoder = new VideoEncoder({
       output: (chunk, metadata) => {
         this.handleVideoChunk(chunk, metadata);
       },
@@ -238,7 +222,7 @@ export class MediaProcessor {
       },
     });
 
-    this.videoEncoder.configure({
+    this.vEncoder.configure({
       codec: "avc1.640034",
       width: 1920,
       height: 1080,
@@ -249,11 +233,11 @@ export class MediaProcessor {
     audioTrack: MediaStreamTrack,
     videoTrack: MediaStreamTrack
   ) {
-    this.audioReadableStream = new MediaStreamTrackProcessor({
+    this.aStream = new MediaStreamTrackProcessor({
       track: audioTrack,
     }).readable;
 
-    this.videoReadableStream = new MediaStreamTrackProcessor({
+    this.vStream = new MediaStreamTrackProcessor({
       track: videoTrack,
     }).readable;
   }
