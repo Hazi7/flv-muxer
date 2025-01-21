@@ -109,22 +109,20 @@ export class FlvMuxer {
   }
 
   private initTransform() {
-    let muxer = this;
-
     this.transform = new TransformStream({
-      async start(controller) {
-        const header = muxer.encoder.encodeFlvHeader(
-          !!muxer.options.video,
-          !!muxer.options.audio
+      start: async (controller) => {
+        const header = this.encoder.encodeFlvHeader(
+          !!this.options.video,
+          !!this.options.audio
         );
-        const metadata = muxer.encodeMetadata();
+        const metadata = this.encodeMetadata();
         controller.enqueue(header);
         controller.enqueue(metadata);
 
-        muxer.processor.start();
+        this.processor.start();
       },
-      transform(chunk, controller) {
-        const tag = muxer.muxChunk(chunk);
+      transform: (chunk, controller) => {
+        const tag = this.muxChunk(chunk);
         controller.enqueue(tag);
       },
     });

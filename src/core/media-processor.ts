@@ -82,10 +82,9 @@ export class MediaProcessor {
       this.readAndEncode(this.vStream.getReader(), this.vEncoder);
     }
 
-    const mediaProcessor = this;
     this.oStream = new ReadableStream({
-      start(controller) {
-        mediaProcessor.buffer.subscribe((data) => {
+      start: (controller) => {
+        this.buffer.subscribe((data) => {
           controller.enqueue(data);
         });
       },
