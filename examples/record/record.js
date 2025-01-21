@@ -13,9 +13,12 @@ async function getDisplayMedia() {
 
 let recordingChunks = [];
 
+// const ws = new WebSocket("ws://127.0.0.1:3000/livestream/push");
+
 const writable = new WritableStream({
   write: (chunk) => {
     recordingChunks.push(chunk);
+    // ws.send(chunk);
   },
 });
 

@@ -16,7 +16,7 @@ import { ScriptEncoder } from "./script-encoder";
  * @property {keyof typeof SoundRate} soundRate - 音频采样率。
  * @property {keyof typeof SoundSize} soundSize - 音频样本大小。
  * @property {keyof typeof SoundType} soundType - 音频类型（单声道或立体声）。
- * @property {number} timestamp - 音频数据的时间戳。
+ * @property {number} timestamp - 音频数据的时间戳 dts。
  * @property {Uint8Array} [audioData] - 音频数据（如果 soundFormat 是 "AAC" 则必需）。
  * @property {keyof typeof AACPacketType} [aacPacketType] - AAC 数据包类型（如果 soundFormat 是 "AAC" 则必需）。
  */
