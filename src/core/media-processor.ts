@@ -6,7 +6,7 @@ import { MediaBuffer, type MediaChunk } from "./media-buffer";
  */
 export class MediaProcessor {
   private readonly options: MuxerOptions;
-  private readonly buffer: MediaBuffer<MediaChunk>;
+  private readonly buffer: MediaBuffer;
   private audioStream: ReadableStream | null = null;
   private videoStream: ReadableStream | null = null;
   private outputStream: ReadableStream | null = null;
@@ -77,21 +77,46 @@ export class MediaProcessor {
   async start() {
     // 存存在音频轨道，进行编码
     if (this.audioStream) {
-      const reader = this.audioStream.getReader();
-      this.encodeAudioChunk(reader, this.audioEncoder);
+      this.audioStream.pipeTo(
+        new WritableStream({
+          write: (frame) => {
+            if (this.audioEncoder) {
+              // 当编码器不过载时候才处理帧，否则丢弃当前帧
+              if (this.audioEncoder.encodeQueueSize < 2) {
+                this.audioEncoder.encode(frame);
+              }
+              frame.close();
+            }
+          },
+        })
+      );
     }
 
     // 如存在视频轨道，进行编码
     if (this.videoStream) {
-      const reader = this.videoStream.getReader();
-      this.encodeVideoChunk(reader, this.videoEncoder);
+      this.videoStream.pipeTo(
+        new WritableStream({
+          write: (frame) => {
+            if (this.videoEncoder) {
+              if (this.videoEncoder.encodeQueueSize < 2) {
+                this.frameCount++;
+                this.videoEncoder.encode(frame, {
+                  keyFrame: this.frameCount % 60 === 0,
+                });
+              }
+              frame.close();
+            }
+          },
+        })
+      );
     }
 
     // 创建输出流
     this.outputStream = new ReadableStream({
       start: (controller) => {
-        this.buffer.subscribe((data) => {
-          controller.enqueue(data);
+        this.buffer.subscribe(() => {
+          const chunk = this.buffer.getNextChunk();
+          controller.enqueue(chunk);
         });
       },
       cancel: () => {},
@@ -110,46 +135,6 @@ export class MediaProcessor {
     } catch (error) {
       console.error(`Failed to close writer: ${error}`);
     }
-  }
-
-  private encodeVideoChunk(
-    reader: ReadableStreamDefaultReader,
-    encoder: VideoEncoder | AudioEncoder | null
-  ) {
-    if (!reader || !encoder) return;
-
-    reader.read().then(({ value, done }) => {
-      if (done) return;
-
-      // 当编码器不过载时候才处理帧，否则丢弃当前帧
-      if (encoder.encodeQueueSize < 2) {
-        this.frameCount++;
-        this.lastVideoFrame = value;
-        encoder.encode(value, { keyFrame: this.frameCount % 150 === 0 });
-      }
-      value.close();
-
-      this.encodeVideoChunk(reader, encoder);
-    });
-  }
-
-  private encodeAudioChunk(
-    reader: ReadableStreamDefaultReader,
-    encoder: VideoEncoder | AudioEncoder | null
-  ) {
-    if (!reader || !encoder) return;
-
-    reader.read().then(({ value, done }) => {
-      if (done) return;
-
-      // 当编码器不过载时候才处理帧，否则丢弃当前帧
-      if (encoder.encodeQueueSize < 2) {
-        encoder.encode(value);
-      }
-      value.close();
-
-      this.encodeAudioChunk(reader, encoder);
-    });
   }
 
   /**

@@ -9,14 +9,16 @@ export interface MediaChunk {
   isKey: boolean;
 }
 
-export class MediaBuffer<T> extends RingBuffer<T> {
-  private subs: ((data: T) => void)[] = [];
+export class MediaBuffer extends RingBuffer<MediaChunk> {
+  private subs: (() => void)[] = [];
+  private timer: any | null = null;
+  private lastChunk: MediaChunk | null = null;
 
   constructor() {
     super(512);
   }
 
-  subscribe(callback: (data: T) => void) {
+  subscribe(callback: () => void) {
     this.subs.push(callback);
 
     return () => {
@@ -27,13 +29,25 @@ export class MediaBuffer<T> extends RingBuffer<T> {
     };
   }
 
-  addChunk(chunk: T) {
+  addChunk(chunk: MediaChunk) {
     this.enqueue(chunk);
-    this.notifySubs(chunk);
+    // this.lastChunk = chunk;
+    this.notifySubs();
+
+    // this.timer && clearTimeout(this.timer);
+    // this.timer = setTimeout(() => {
+    //   if (!this.lastChunk) return;
+    //   this.addChunk({
+    //     type: this.lastChunk.type,
+    //     data: this.lastChunk.data,
+    //     isKey: this.lastChunk.isKey,
+    //     timestamp: 0,
+    //   });
+    // }, 200);
   }
 
-  private notifySubs(data: T) {
-    this.subs.forEach((callback) => callback(data));
+  private notifySubs() {
+    this.subs.forEach((callback) => callback());
   }
 
   getNextChunk() {
