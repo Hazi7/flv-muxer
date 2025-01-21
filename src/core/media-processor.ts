@@ -78,13 +78,13 @@ export class MediaProcessor {
     // 存存在音频轨道，进行编码
     if (this.audioStream) {
       const reader = this.audioStream.getReader();
-      this.encodeVideoChunk(reader, this.audioEncoder);
+      this.encodeAudioChunk(reader, this.audioEncoder);
     }
 
     // 如存在视频轨道，进行编码
     if (this.videoStream) {
       const reader = this.videoStream.getReader();
-      this.encodeAudioChunk(reader, this.videoEncoder);
+      this.encodeVideoChunk(reader, this.videoEncoder);
     }
 
     // 创建输出流
@@ -228,7 +228,8 @@ export class MediaProcessor {
     return Math.max(0, (timestamp - this.baseTimestamp) / 1000);
   }
 
-  private async initEncoder() {
+  private initEncoder() {
+    // 初始化音频编码器
     this.audioEncoder = new AudioEncoder({
       output: (chunk, metadata) => {
         this.handleAudioChunk(chunk, metadata);
@@ -237,19 +238,11 @@ export class MediaProcessor {
         console.log(error);
       },
     });
-
     if (this.options.audio) {
-      const { supported } = await AudioEncoder.isConfigSupported(
-        this.options.audio
-      );
-
-      if (supported) {
-        this.audioEncoder.configure(this.options.audio);
-      } else {
-        throw new Error("不支持的配置");
-      }
+      this.audioEncoder.configure(this.options.audio);
     }
 
+    // 初始化视频编码器
     this.videoEncoder = new VideoEncoder({
       output: (chunk, metadata) => {
         this.handleVideoChunk(chunk, metadata);
@@ -258,12 +251,9 @@ export class MediaProcessor {
         console.log(error);
       },
     });
-
-    this.videoEncoder.configure({
-      codec: "avc1.640034",
-      width: 1920,
-      height: 1080,
-    });
+    if (this.options.video) {
+      this.videoEncoder.configure(this.options.video);
+    }
   }
 
   private initProcessor(

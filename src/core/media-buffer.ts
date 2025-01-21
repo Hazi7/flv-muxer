@@ -3,7 +3,7 @@ import { RingBuffer } from "./ring-buffer";
 export interface MediaChunk {
   type: "AAC_RAW" | "AAC_SE" | "AVC_SE" | "AVC_NALU";
   data: Uint8Array;
-  // pts
+  // PTS
   // [https://w3c.github.io/webcodecs/#dom-encodedvideochunk-timestamp-slot]
   timestamp: number;
   isKey: boolean;
