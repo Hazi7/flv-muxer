@@ -114,8 +114,7 @@ export class MediaProcessor {
     // 创建输出流
     this.outputStream = new ReadableStream({
       start: (controller) => {
-        this.buffer.subscribe(() => {
-          const chunk = this.buffer.getNextChunk();
+        this.buffer.subscribe((chunk) => {
           controller.enqueue(chunk);
         });
       },

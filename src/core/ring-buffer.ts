@@ -1,8 +1,9 @@
 export class RingBuffer<T> {
-  private buffer: (T | undefined)[];
+  buffer: (T | undefined)[];
   private head: number = 0; // 指向下一个写入的位置
   private tail: number = 0; // 指向下一个读取的位置
   private size: number = 0; // 当前缓冲区的大小（元素个数）
+  private lastTimestamp: number = 0;
 
   constructor(private capacity: number) {
     if (capacity <= 0) {

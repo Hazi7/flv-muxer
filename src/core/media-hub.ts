@@ -10,18 +10,20 @@ export interface MediaChunk {
 }
 
 export class MediaHub {
-  private subs: (() => void)[] = [];
-  private audioBuffer: RingBuffer<MediaChunk>;
-  private videoBuffer: RingBuffer<MediaChunk>;
+  private subs: ((chunk: MediaChunk) => void)[] = [];
+  private audioBuffer: MediaChunk[];
+  private videoBuffer: MediaChunk[];
+  private videoLastTimestamp: number = 0;
+  private audioLastTimestamp: number = 0;
   private timer: any | null = null;
   private lastChunk: MediaChunk | null = null;
 
   constructor() {
-    this.audioBuffer = new RingBuffer(16);
-    this.videoBuffer = new RingBuffer(16);
+    this.audioBuffer = [];
+    this.videoBuffer = [];
   }
 
-  subscribe(callback: () => void) {
+  subscribe(callback: (chunk: MediaChunk) => void) {
     this.subs.push(callback);
 
     return () => {
@@ -33,37 +35,53 @@ export class MediaHub {
   }
 
   addChunk(chunk: MediaChunk) {
+    // 当添加音频包时
     if (chunk.type === "AAC_RAW" || chunk.type === "AAC_SE") {
-      this.audioBuffer.enqueue(chunk);
+      while (
+        this.videoBuffer.length > 0 &&
+        this.videoBuffer[0].timestamp <= chunk.timestamp
+      ) {
+        let cacheChunk = this.videoBuffer.shift();
+        if (cacheChunk) {
+          this.notifySubs(cacheChunk);
+          this.videoLastTimestamp = cacheChunk?.timestamp;
+        }
+      }
+
+      if (chunk.timestamp <= this.videoLastTimestamp) {
+        this.notifySubs(chunk);
+        this.audioLastTimestamp = chunk.timestamp;
+      } else {
+        this.audioBuffer.push(chunk);
+      }
     } else if (chunk.type === "AVC_NALU" || chunk.type === "AVC_SE") {
-      this.videoBuffer.enqueue(chunk);
+      while (
+        this.audioBuffer.length > 0 &&
+        this.audioBuffer[0].timestamp <= chunk.timestamp
+      ) {
+        let cacheChunk = this.audioBuffer.shift();
+        if (cacheChunk) {
+          this.notifySubs(cacheChunk);
+          this.audioLastTimestamp = cacheChunk.timestamp;
+        }
+      }
+
+      if (chunk.timestamp <= this.audioLastTimestamp) {
+        this.notifySubs(chunk);
+        this.videoLastTimestamp = chunk.timestamp;
+      } else {
+        this.videoBuffer.push(chunk);
+      }
     } else {
       throw new Error("未知类型的媒体包");
     }
-    // this.lastChunk = chunk;
-    this.notifySubs();
-
-    // this.timer && clearTimeout(this.timer);
-    // this.timer = setTimeout(() => {
-    //   if (!this.lastChunk) return;
-    //   this.addChunk({
-    //     type: this.lastChunk.type,
-    //     data: this.lastChunk.data,
-    //     isKey: this.lastChunk.isKey,
-    //     timestamp: 0,
-    //   });
-    // }, 200);
   }
 
-  private notifySubs() {
-    this.subs.forEach((callback) => callback());
+  private notifySubs(chunk: MediaChunk) {
+    this.subs.forEach((callback) => callback(chunk));
   }
 
-  private async flush() {
-    
-  }
-
-  getNextChunk() {}
+  private async flush() {}
 
   clear() {
     this.subs = [];
