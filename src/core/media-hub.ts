@@ -35,43 +35,66 @@ export class MediaHub {
   }
 
   addChunk(chunk: MediaChunk) {
-    // 当添加音频包时
+    console.log("in", chunk.timestamp);
     if (chunk.type === "AAC_RAW" || chunk.type === "AAC_SE") {
+      // 当添加音频包时
       while (
         this.videoBuffer.length > 0 &&
         this.videoBuffer[0].timestamp <= chunk.timestamp
       ) {
-        let cacheChunk = this.videoBuffer.shift();
-        if (cacheChunk) {
-          this.notifySubs(cacheChunk);
-          this.videoLastTimestamp = cacheChunk?.timestamp;
+        if (
+          this.audioBuffer.length > 0 &&
+          this.audioBuffer[0].timestamp < this.videoBuffer[0].timestamp
+        ) {
+          let cacheChunk = this.audioBuffer.shift();
+          if (cacheChunk) {
+            this.notifySubs(cacheChunk);
+            this.audioLastTimestamp = cacheChunk?.timestamp;
+          }
+        } else {
+          let cacheChunk = this.videoBuffer.shift();
+          if (cacheChunk) {
+            this.notifySubs(cacheChunk);
+            this.videoLastTimestamp = cacheChunk?.timestamp;
+          }
         }
       }
 
       if (chunk.timestamp <= this.videoLastTimestamp) {
         this.notifySubs(chunk);
-        this.audioLastTimestamp = chunk.timestamp;
       } else {
         this.audioBuffer.push(chunk);
       }
+      this.audioLastTimestamp = chunk.timestamp;
     } else if (chunk.type === "AVC_NALU" || chunk.type === "AVC_SE") {
       while (
         this.audioBuffer.length > 0 &&
-        this.audioBuffer[0].timestamp <= chunk.timestamp
+        this.audioBuffer[0].timestamp < chunk.timestamp
       ) {
-        let cacheChunk = this.audioBuffer.shift();
-        if (cacheChunk) {
-          this.notifySubs(cacheChunk);
-          this.audioLastTimestamp = cacheChunk.timestamp;
+        if (
+          this.videoBuffer.length > 0 &&
+          this.videoBuffer[0].timestamp < this.audioBuffer[0].timestamp
+        ) {
+          let cacheChunk = this.videoBuffer.shift();
+          if (cacheChunk) {
+            this.notifySubs(cacheChunk);
+            this.videoLastTimestamp = cacheChunk.timestamp;
+          }
+        } else {
+          let cacheChunk = this.audioBuffer.shift();
+          if (cacheChunk) {
+            this.notifySubs(cacheChunk);
+            this.audioLastTimestamp = cacheChunk.timestamp;
+          }
         }
       }
 
       if (chunk.timestamp <= this.audioLastTimestamp) {
         this.notifySubs(chunk);
-        this.videoLastTimestamp = chunk.timestamp;
       } else {
         this.videoBuffer.push(chunk);
       }
+      this.videoLastTimestamp = chunk.timestamp;
     } else {
       throw new Error("未知类型的媒体包");
     }
