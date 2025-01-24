@@ -6,19 +6,19 @@ import {
   AVCNALUStrategy,
 } from "../strategies/mux-strategy";
 import { FlvEncoder } from "./flv-encoder";
-import type { MediaChunk } from "./media-hub";
-import { MediaProcessor } from "./media-processor";
+import { MediaHub, type MediaChunk } from "./media-hub";
 
 export interface MuxerOptions {
-  video: VideoEncoderConfig | undefined;
-  audio: AudioEncoderConfig | undefined;
+  video: VideoEncoderConfig;
+  audio: AudioEncoderConfig;
 }
 
 export class FlvMuxer {
   private readonly strategies: { [key: string]: MuxStrategy } = {};
   private readonly options;
-  private processor: MediaProcessor;
   private encoder: FlvEncoder;
+  private mediaHub: MediaHub;
+  private rawStream: ReadableStream;
   private transform: TransformStream | null = null;
   private writable: WritableStream | null = null;
 
@@ -31,10 +31,19 @@ export class FlvMuxer {
     this.writable = writable;
     this.options = options;
     this.encoder = new FlvEncoder();
-    this.processor = new MediaProcessor(audioTrack, videoTrack, options);
+
+    this.mediaHub = MediaHub.getInstance();
 
     // 初始化策略
     this.initStrategies();
+
+    this.rawStream = new ReadableStream({
+      start: (controller) => {
+        this.mediaHub.on("chunk", (chunk) => {
+          controller.enqueue(chunk);
+        });
+      },
+    });
 
     // 初始化转换流
     this.initTransform();
@@ -45,10 +54,7 @@ export class FlvMuxer {
     if (!this.writable) return;
 
     try {
-      this.processor
-        .getOutputStream()
-        ?.pipeThrough(this.transform)
-        .pipeTo(this.writable);
+      this.rawStream.pipeThrough(this.transform).pipeTo(this.writable);
     } catch (error) {
       throw new Error(`Error starting Muxer: ${error}`);
     }
@@ -76,7 +82,7 @@ export class FlvMuxer {
       if (this.options.audio) {
         Object.assign(metadata, {
           audiocodecid: 10,
-          audiodatarate: this.options.audio.bitrate || 128,
+          // audiodatarate: this.options.audio.bitrate || 128,
           stereo: true,
           audiosamplerate: this.options.audio.sampleRate,
         });
@@ -118,8 +124,6 @@ export class FlvMuxer {
         const metadata = this.encodeMetadata();
         controller.enqueue(header);
         controller.enqueue(metadata);
-
-        this.processor.start();
       },
       transform: (chunk, controller) => {
         const tag = this.muxChunk(chunk);
