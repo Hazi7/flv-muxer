@@ -1,5 +1,4 @@
 import {
-  BaseEncoderTrack,
   type AudioEncoderTrack,
   type VideoEncoderTrack,
 } from "./encoder-track";
@@ -16,8 +15,7 @@ export interface MediaChunk {
 
 export class MediaHub extends EventBus {
   private static instance: MediaHub;
-  private static videoTrack: VideoEncoderTrack;
-  private static audioTrack: AudioEncoderTrack;
+  private static tracks: [AudioEncoderTrack, VideoEncoderTrack];
 
   /**
    * 创建FlvStreamer的实例。
@@ -37,11 +35,11 @@ export class MediaHub extends EventBus {
   }
 
   static setAudioTrack(track: AudioEncoderTrack) {
-    MediaHub.audioTrack = track;
+    MediaHub.tracks[0] = track;
   }
 
   static setVideoTrack(track: VideoEncoderTrack) {
-    MediaHub.videoTrack = track;
+    MediaHub.tracks[1] = track;
   }
 
   addChunk(chunk: MediaChunk) {
@@ -51,10 +49,25 @@ export class MediaHub extends EventBus {
       return;
     }
 
-    if (chunk.type === "AAC_RAW") {
-      if (chunk.timestamp <= BaseEncoderTrack.baseTimestamp) {
+    if (
+      MediaHub.tracks.some((track) => {
+        return track.buffer.length === 0;
+      })
+    ) {
+      return;
+    }
+
+    if (chunk.type === "AAC_RAW" || chunk.type === "AVC_NALU") {
+      if (MediaHub.tracks.length <= 1) {
+        this.emit("chunk", chunk);
+        return;
+      }
+
+      if (MediaHub.tracks.length > 1) {
+        MediaHub.tracks.forEach(() => {});
       }
     }
+
     // 是se时直接写入
     // 任一轨道进入，如果另一轨道没数据，则加入该轨道缓存
     // 如果俩个轨道都有数据，比较俩个轨道时间戳小的先取出
@@ -62,15 +75,4 @@ export class MediaHub extends EventBus {
   }
 
   flush() {}
-
-  isBoth() {
-    if (
-      MediaHub.videoTrack.buffer.length > 0 &&
-      MediaHub.audioTrack.buffer.length > 0
-    ) {
-      return true;
-    }
-
-    return false;
-  }
 }

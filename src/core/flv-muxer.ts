@@ -5,6 +5,7 @@ import {
   AVCSEStrategy,
   AVCNALUStrategy,
 } from "../strategies/mux-strategy";
+import { AudioEncoderTrack, VideoEncoderTrack } from "./encoder-track";
 import { FlvEncoder } from "./flv-encoder";
 import { MediaHub, type MediaChunk } from "./media-hub";
 
@@ -33,6 +34,16 @@ export class FlvMuxer {
     this.encoder = new FlvEncoder();
 
     this.mediaHub = MediaHub.getInstance();
+
+    if (audioTrack) {
+      const track = new AudioEncoderTrack(audioTrack, this.options.audio);
+      MediaHub.setAudioTrack(track);
+    }
+
+    if (videoTrack) {
+      const track = new VideoEncoderTrack(videoTrack, this.options.video);
+      MediaHub.setVideoTrack(track);
+    }
 
     // 初始化策略
     this.initStrategies();

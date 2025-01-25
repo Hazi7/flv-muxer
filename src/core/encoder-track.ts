@@ -15,13 +15,26 @@ type EncodedMediaChunkMetadata =
   | EncodedAudioChunkMetadata
   | EncodedVideoChunkMetadata;
 
-export abstract class BaseEncoderTrack {
-  static baseTimestamp = 0;
+class TrackState {
+  private static instance: TrackState;
+  baseTimestamp: number = 0;
+  constructor() {}
 
+  static getInstance() {
+    if (!TrackState.instance) {
+      TrackState.instance = new TrackState();
+    }
+
+    return TrackState.instance;
+  }
+}
+
+export abstract class BaseEncoderTrack {
   processor: MediaStreamTrackProcessor;
   encoder!: VideoEncoder | AudioEncoder;
   buffer: RingBuffer<TrackChunk>;
   mediaHub: MediaHub;
+  state: TrackState;
   _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
 
   get decoderConfig(): VideoDecoderConfig | undefined {
@@ -45,8 +58,7 @@ export abstract class BaseEncoderTrack {
     this.initEncoder(config);
 
     this.mediaHub = MediaHub.getInstance();
-
-    // 初始化缓冲区
+    this.state = TrackState.getInstance();
     this.buffer = new RingBuffer(16);
   }
 
@@ -63,11 +75,11 @@ export abstract class BaseEncoderTrack {
   }
 
   calculateTimestamp(timestamp: number) {
-    if (!BaseEncoderTrack.baseTimestamp) {
-      BaseEncoderTrack.baseTimestamp = timestamp;
+    if (!this.state.baseTimestamp) {
+      this.state.baseTimestamp = timestamp;
     }
 
-    return Math.max(0, (timestamp - BaseEncoderTrack.baseTimestamp) / 1000);
+    return Math.max(0, (timestamp - this.state.baseTimestamp) / 1000);
   }
 
   async stop(): Promise<void> {
