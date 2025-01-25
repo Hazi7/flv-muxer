@@ -1,5 +1,5 @@
 async function getDisplayMedia() {
-  return navigator.mediaDevices.getDisplayMedia({
+  return navigator.mediaDevices.getUserMedia({
     video: {
       frameRate: {
         ideal: 30,

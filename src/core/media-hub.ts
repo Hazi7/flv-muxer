@@ -15,7 +15,26 @@ export interface MediaChunk {
 
 export class MediaHub extends EventBus {
   private static instance: MediaHub;
-  private static tracks: [AudioEncoderTrack, VideoEncoderTrack];
+  private tracks: [
+    AudioEncoderTrack | undefined,
+    VideoEncoderTrack | undefined
+  ] = [undefined, undefined];
+
+  get audioEncoderTrack(): AudioEncoderTrack | undefined {
+    return this.tracks[0];
+  }
+
+  set audioEncoderTrack(track: AudioEncoderTrack) {
+    this.tracks[0] = track;
+  }
+
+  get videoEncoderTrack(): VideoEncoderTrack | undefined {
+    return this.tracks[1];
+  }
+
+  set videoEncoderTrack(track: VideoEncoderTrack) {
+    this.tracks[1] = track;
+  }
 
   /**
    * 创建FlvStreamer的实例。
@@ -34,44 +53,81 @@ export class MediaHub extends EventBus {
     return MediaHub.instance;
   }
 
-  static setAudioTrack(track: AudioEncoderTrack) {
-    MediaHub.tracks[0] = track;
-  }
-
-  static setVideoTrack(track: VideoEncoderTrack) {
-    MediaHub.tracks[1] = track;
-  }
-
   addChunk(chunk: MediaChunk) {
     // 处理序列数据，直接发送
     if (chunk.type === "AAC_SE" || chunk.type === "AVC_SE") {
       this.emit("chunk", chunk);
+
       return;
     }
 
-    if (
-      MediaHub.tracks.some((track) => {
-        return track.buffer.length === 0;
-      })
-    ) {
-      return;
-    }
-
-    if (chunk.type === "AAC_RAW" || chunk.type === "AVC_NALU") {
-      if (MediaHub.tracks.length <= 1) {
+    if (chunk.type === "AAC_RAW") {
+      // 如果是单轨道，直接发布数据
+      if (this.tracks.some((track) => !track)) {
         this.emit("chunk", chunk);
-        return;
+      } else {
+        if (this.videoEncoderTrack && this.audioEncoderTrack) {
+          if (this.videoEncoderTrack) {
+            if (chunk.timestamp <= this.videoEncoderTrack.lastTimestamp) {
+              this.emit("chunk", chunk);
+            }
+            const buffer = this.videoEncoderTrack.buffer;
+            const peekedChunk = buffer.peek();
+            while (
+              buffer.length > 0 &&
+              peekedChunk &&
+              peekedChunk.timestamp <= chunk.timestamp
+            ) {
+              const chunk = this.audioEncoderTrack.buffer.dequeue();
+              this.emit("chunk", chunk);
+            }
+          }
+        }
       }
 
-      if (MediaHub.tracks.length > 1) {
-        MediaHub.tracks.forEach(() => {});
+      return;
+    }
+
+    if (chunk.type === "AVC_NALU") {
+      // 如果是单轨道，直接发布数据
+      if (this.tracks.some((track) => !track)) {
+        this.emit("chunk", chunk);
+      } else {
+        // 是双轨道
+        if (this.audioEncoderTrack && this.videoEncoderTrack) {
+          if (chunk.timestamp <= this.audioEncoderTrack.lastTimestamp) {
+            this.emit("chunk", chunk);
+          }
+          const buffer = this.audioEncoderTrack.buffer;
+          const peekedChunk = buffer.peek();
+
+          while (
+            buffer.length > 0 &&
+            peekedChunk &&
+            peekedChunk.timestamp <= chunk.timestamp
+          ) {
+            const chunk = this.videoEncoderTrack.buffer.dequeue();
+            this.emit("chunk", chunk);
+          }
+        }
       }
+
+      return;
     }
 
     // 是se时直接写入
     // 任一轨道进入，如果另一轨道没数据，则加入该轨道缓存
     // 如果俩个轨道都有数据，比较俩个轨道时间戳小的先取出
     // 如果任一轨道进入时间戳小于等于另一轨道最后时间戳则直接写入
+  }
+
+  start(audio: boolean, video: boolean) {
+    if (audio && this.audioEncoderTrack) {
+      this.audioEncoderTrack.start();
+    }
+    if (video && this.videoEncoderTrack) {
+      this.videoEncoderTrack.start();
+    }
   }
 
   flush() {}

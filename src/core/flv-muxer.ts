@@ -37,12 +37,12 @@ export class FlvMuxer {
 
     if (audioTrack) {
       const track = new AudioEncoderTrack(audioTrack, this.options.audio);
-      MediaHub.setAudioTrack(track);
+      this.mediaHub.audioEncoderTrack = track;
     }
 
     if (videoTrack) {
       const track = new VideoEncoderTrack(videoTrack, this.options.video);
-      MediaHub.setVideoTrack(track);
+      this.mediaHub.videoEncoderTrack = track;
     }
 
     // 初始化策略
@@ -69,6 +69,8 @@ export class FlvMuxer {
     } catch (error) {
       throw new Error(`Error starting Muxer: ${error}`);
     }
+
+    this.mediaHub.start(!!this.options.audio, !!this.options.video);
   }
 
   /**

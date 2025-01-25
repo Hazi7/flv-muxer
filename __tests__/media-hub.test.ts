@@ -6,12 +6,12 @@ describe("MediaHub", () => {
   let mediaHub: MediaHub;
 
   beforeEach(() => {
-    mediaHub = new MediaHub();
+    mediaHub = MediaHub.getInstance();
   });
 
   it("时间戳应正确排序 1", () => {
     let result = [];
-    mediaHub.subscribe((chunk) => {
+    mediaHub.on("chunk", (chunk) => {
       result.push(chunk.timestamp);
     });
 
@@ -69,7 +69,7 @@ describe("MediaHub", () => {
 
   it("时间戳应正确排序 2", () => {
     let result = [];
-    mediaHub.subscribe((chunk) => {
+    mediaHub.on("chunk", (chunk) => {
       result.push(chunk.timestamp);
     });
 
@@ -143,6 +143,8 @@ describe("MediaHub", () => {
       timestamp: 85.333,
     });
 
-    expect(result.toString()).toBe("0,0,0,21.333,23.001,42.666,56.07,64,85.333");
+    expect(result.toString()).toBe(
+      "0,0,0,21.333,23.001,42.666,56.07,64,85.333"
+    );
   });
 });
