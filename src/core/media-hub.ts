@@ -114,11 +114,6 @@ export class MediaHub extends EventBus {
 
       return;
     }
-
-    // 是se时直接写入
-    // 任一轨道进入，如果另一轨道没数据，则加入该轨道缓存
-    // 如果俩个轨道都有数据，比较俩个轨道时间戳小的先取出
-    // 如果任一轨道进入时间戳小于等于另一轨道最后时间戳则直接写入
   }
 
   start(audio: boolean, video: boolean) {
