@@ -13,8 +13,8 @@ export interface MediaChunk {
   isKey: boolean;
 }
 
-export class MediaHub extends EventBus {
-  static #instance: MediaHub;
+export class StreamMerge {
+  #eventBus: EventBus;
   #tracks: [AudioEncoderTrack | undefined, VideoEncoderTrack | undefined] = [
     undefined,
     undefined,
@@ -42,26 +42,18 @@ export class MediaHub extends EventBus {
    * @param options - FLV流的配置选项。
    */
   constructor() {
-    super();
-  }
-
-  static getInstance(): MediaHub {
-    if (!MediaHub.#instance) {
-      MediaHub.#instance = new MediaHub();
-    }
-
-    return MediaHub.#instance;
+    this.#eventBus = EventBus.getInstance();
   }
 
   pushAudioChunk(chunk: MediaChunk) {
     if (chunk.type === "AAC_SE") {
-      this.emit("chunk", chunk);
+      this.#eventBus.emit("chunk", chunk);
     }
   }
 
   pushVideoChunk(chunk: MediaChunk) {
     if (chunk.type === "AAC_SE") {
-      this.emit("chunk", chunk);
+      this.#eventBus.emit("chunk", chunk);
     }
   }
 

@@ -5,8 +5,9 @@ import {
   AVCSEStrategy,
   AVCNALUStrategy,
 } from "../strategies/mux-strategy";
+import { EventBus } from "./event-bus";
 import { FlvEncoder } from "./flv-encoder";
-import { MediaHub, type MediaChunk } from "./media-hub";
+import { type MediaChunk } from "./stream-merge";
 
 export interface MuxerOptions {
   video: {
@@ -20,8 +21,8 @@ export interface MuxerOptions {
 }
 
 export class FlvMuxer {
-  readonly #mediaHub: MediaHub;
   readonly #encoder: FlvEncoder;
+  readonly #eventBus: EventBus;
   #options: MuxerOptions | undefined;
   #sourceStream: ReadableStream | undefined;
   #muxStream: TransformStream | undefined;
@@ -30,7 +31,7 @@ export class FlvMuxer {
 
   constructor(writable: WritableStream) {
     this.#encoder = new FlvEncoder();
-    this.#mediaHub = MediaHub.getInstance();
+    this.#eventBus = EventBus.getInstance();
 
     this.#outputStream = writable;
 
@@ -41,7 +42,7 @@ export class FlvMuxer {
   private initSourceStream() {
     this.#sourceStream = new ReadableStream({
       start: (controller) => {
-        this.#mediaHub.on("chunk", (chunk) => {
+        this.#eventBus.on("chunk", (chunk) => {
           controller.enqueue(chunk);
         });
       },
@@ -95,7 +96,7 @@ export class FlvMuxer {
       throw new Error(`Error starting Muxer: ${error}`);
     }
 
-    this.#mediaHub.start(!!this.#options.audio, !!this.#options.video);
+    // this.#mediaHub.start(!!this.#options.audio, !!this.#options.video);
   }
 
   async configure(config: MuxerOptions) {
@@ -104,8 +105,7 @@ export class FlvMuxer {
 
   async stop() {
     try {
-
-      this.#mediaHub
+      this.#eventBus;
 
       this.#sourceStream = undefined;
       this.#outputStream = undefined;

@@ -1,10 +1,19 @@
 type EventHandler = (...args: any[]) => void;
 
 export class EventBus {
+  static #instance: EventBus;
   #events: Map<string, EventHandler[]>;
 
   constructor() {
     this.#events = new Map();
+  }
+
+  static getInstance() {
+    if (!this.#instance) {
+      this.#instance = new EventBus();
+    }
+
+    return this.#instance;
   }
 
   // 订阅事件
