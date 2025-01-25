@@ -14,26 +14,26 @@ export interface MediaChunk {
 }
 
 export class MediaHub extends EventBus {
-  private static instance: MediaHub;
-  private tracks: [
-    AudioEncoderTrack | undefined,
-    VideoEncoderTrack | undefined
-  ] = [undefined, undefined];
+  static #instance: MediaHub;
+  #tracks: [AudioEncoderTrack | undefined, VideoEncoderTrack | undefined] = [
+    undefined,
+    undefined,
+  ];
 
   get audioEncoderTrack(): AudioEncoderTrack | undefined {
-    return this.tracks[0];
+    return this.#tracks[0];
   }
 
   set audioEncoderTrack(track: AudioEncoderTrack) {
-    this.tracks[0] = track;
+    this.#tracks[0] = track;
   }
 
   get videoEncoderTrack(): VideoEncoderTrack | undefined {
-    return this.tracks[1];
+    return this.#tracks[1];
   }
 
   set videoEncoderTrack(track: VideoEncoderTrack) {
-    this.tracks[1] = track;
+    this.#tracks[1] = track;
   }
 
   /**
@@ -46,11 +46,11 @@ export class MediaHub extends EventBus {
   }
 
   static getInstance(): MediaHub {
-    if (!MediaHub.instance) {
-      MediaHub.instance = new MediaHub();
+    if (!MediaHub.#instance) {
+      MediaHub.#instance = new MediaHub();
     }
 
-    return MediaHub.instance;
+    return MediaHub.#instance;
   }
 
   pushAudioChunk(chunk: MediaChunk) {
@@ -63,7 +63,6 @@ export class MediaHub extends EventBus {
     if (chunk.type === "AAC_SE") {
       this.emit("chunk", chunk);
     }
-
   }
 
   processQueue() {}

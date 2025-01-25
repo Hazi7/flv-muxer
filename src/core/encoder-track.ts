@@ -16,24 +16,24 @@ type EncodedMediaChunkMetadata =
   | EncodedVideoChunkMetadata;
 
 class TrackState {
-  private static instance: TrackState;
+  static #instance: TrackState;
   baseTimestamp: number = 0;
   constructor() {}
 
   static getInstance() {
-    if (!TrackState.instance) {
-      TrackState.instance = new TrackState();
+    if (!TrackState.#instance) {
+      TrackState.#instance = new TrackState();
     }
 
-    return TrackState.instance;
+    return TrackState.#instance;
   }
 }
 
 export abstract class BaseEncoderTrack {
-  processor: MediaStreamTrackProcessor;
+  readonly processor: MediaStreamTrackProcessor;
+  readonly mediaHub: MediaHub;
+  readonly buffer: RingBuffer<TrackChunk>;
   encoder!: VideoEncoder | AudioEncoder;
-  buffer: RingBuffer<TrackChunk>;
-  mediaHub: MediaHub;
 
   state: TrackState;
   lastTimestamp: number = 0;
@@ -52,15 +52,13 @@ export abstract class BaseEncoderTrack {
     track: MediaStreamTrack,
     config: VideoEncoderConfig | AudioEncoderConfig
   ) {
-    this.processor = new MediaStreamTrackProcessor({
-      track,
-    });
+    this.processor = new MediaStreamTrackProcessor({ track });
+    this.mediaHub = MediaHub.getInstance();
+    this.buffer = new RingBuffer(16);
+
     this.initEncoder(config);
 
-    this.mediaHub = MediaHub.getInstance();
     this.state = TrackState.getInstance();
-
-    this.buffer = new RingBuffer(16);
   }
 
   protected abstract handleOutput(
