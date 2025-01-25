@@ -15,31 +15,31 @@ export class BinaryWriter {
   /**
    * 当前写入位置
    */
-  private position: number = 0;
+  #position: number = 0;
 
   /**
    * 用于存储数据的二进制数组
    */
-  private buffer: Uint8Array;
+  #buffer: Uint8Array;
 
   /**
    * 用于操作二进制数组的 DataView
    */
-  private view: DataView;
+  #view: DataView;
 
   /**
    * 是否使用小端字节序
    */
-  private littleEndian: boolean;
+  #littleEndian: boolean;
 
   /**
    * 构造函数，初始化二进制写入器
    * @param littleEndian - 是否使用小端字节序，默认为 false
    */
   constructor(littleEndian: boolean = false) {
-    this.buffer = new Uint8Array(DEFAULT_BUFFER);
-    this.view = new DataView(this.buffer.buffer);
-    this.littleEndian = littleEndian;
+    this.#buffer = new Uint8Array(DEFAULT_BUFFER);
+    this.#view = new DataView(this.#buffer.buffer);
+    this.#littleEndian = littleEndian;
   }
 
   /**
@@ -48,7 +48,7 @@ export class BinaryWriter {
    */
   writeUint8(value: number) {
     this.ensureAvailable(1);
-    this.buffer[this.position++] = value;
+    this.#buffer[this.#position++] = value;
   }
 
   /**
@@ -57,8 +57,8 @@ export class BinaryWriter {
    */
   writeUint16(value: number) {
     this.ensureAvailable(2);
-    this.view.setUint16(this.position, value, this.littleEndian);
-    this.position += 2;
+    this.#view.setUint16(this.#position, value, this.#littleEndian);
+    this.#position += 2;
   }
 
   /**
@@ -67,14 +67,14 @@ export class BinaryWriter {
    */
   writeUint24(value: number) {
     this.ensureAvailable(3);
-    if (this.littleEndian) {
-      this.buffer[this.position++] = value & 0xff;
-      this.buffer[this.position++] = (value >> 8) & 0xff;
-      this.buffer[this.position++] = (value >> 16) & 0xff;
+    if (this.#littleEndian) {
+      this.#buffer[this.#position++] = value & 0xff;
+      this.#buffer[this.#position++] = (value >> 8) & 0xff;
+      this.#buffer[this.#position++] = (value >> 16) & 0xff;
     } else {
-      this.buffer[this.position++] = (value >> 16) & 0xff;
-      this.buffer[this.position++] = (value >> 8) & 0xff;
-      this.buffer[this.position++] = value & 0xff;
+      this.#buffer[this.#position++] = (value >> 16) & 0xff;
+      this.#buffer[this.#position++] = (value >> 8) & 0xff;
+      this.#buffer[this.#position++] = value & 0xff;
     }
   }
 
@@ -84,8 +84,8 @@ export class BinaryWriter {
    */
   writeUint32(value: number) {
     this.ensureAvailable(4);
-    this.view.setUint32(this.position, value, this.littleEndian);
-    this.position += 4;
+    this.#view.setUint32(this.#position, value, this.#littleEndian);
+    this.#position += 4;
   }
 
   /**
@@ -94,7 +94,7 @@ export class BinaryWriter {
    */
   writeInt8(value: number): void {
     this.ensureAvailable(1);
-    this.view.setInt8(this.position++, value);
+    this.#view.setInt8(this.#position++, value);
   }
 
   /**
@@ -103,8 +103,8 @@ export class BinaryWriter {
    */
   writeInt16(value: number): void {
     this.ensureAvailable(2);
-    this.view.setInt16(this.position, value, this.littleEndian);
-    this.position += 2;
+    this.#view.setInt16(this.#position, value, this.#littleEndian);
+    this.#position += 2;
   }
 
   /**
@@ -113,8 +113,8 @@ export class BinaryWriter {
    */
   writeInt32(value: number): void {
     this.ensureAvailable(4);
-    this.view.setInt32(this.position, value, this.littleEndian);
-    this.position += 4;
+    this.#view.setInt32(this.#position, value, this.#littleEndian);
+    this.#position += 4;
   }
 
   /**
@@ -123,8 +123,8 @@ export class BinaryWriter {
    */
   writeFloat32(value: number): void {
     this.ensureAvailable(4);
-    this.view.setFloat32(this.position, value, this.littleEndian);
-    this.position += 4;
+    this.#view.setFloat32(this.#position, value, this.#littleEndian);
+    this.#position += 4;
   }
 
   /**
@@ -133,8 +133,8 @@ export class BinaryWriter {
    */
   writeFloat64(value: number): void {
     this.ensureAvailable(8);
-    this.view.setFloat64(this.position, value, this.littleEndian);
-    this.position += 8;
+    this.#view.setFloat64(this.#position, value, this.#littleEndian);
+    this.#position += 8;
   }
 
   /**
@@ -143,8 +143,8 @@ export class BinaryWriter {
    */
   writeBytes(bytes: Uint8Array) {
     this.ensureAvailable(bytes.byteLength);
-    this.buffer.set(bytes, this.position);
-    this.position += bytes.byteLength;
+    this.#buffer.set(bytes, this.#position);
+    this.#position += bytes.byteLength;
   }
 
   /**
@@ -156,8 +156,8 @@ export class BinaryWriter {
     const encodedStr = encoder.encode(str);
 
     this.ensureAvailable(encodedStr.byteLength);
-    this.buffer.set(encodedStr, this.position);
-    this.position += encodedStr.byteLength;
+    this.#buffer.set(encodedStr, this.#position);
+    this.#position += encodedStr.byteLength;
   }
 
   /**
@@ -165,7 +165,7 @@ export class BinaryWriter {
    * @returns 包含已写入数据的 Uint8Array
    */
   getBytes() {
-    return this.buffer.slice(0, this.position);
+    return this.#buffer.slice(0, this.#position);
   }
 
   /**
@@ -173,14 +173,14 @@ export class BinaryWriter {
    * @returns 当前写入位置
    */
   getPosition() {
-    return this.position;
+    return this.#position;
   }
 
   /**
    * 重置写入位置到缓冲区的起始位置
    */
   reset() {
-    this.position = 0;
+    this.#position = 0;
   }
 
   /**
@@ -188,10 +188,10 @@ export class BinaryWriter {
    * @param position - 新的写入位置
    */
   seek(position: number) {
-    if (position < 0 || position > this.buffer.byteLength) {
+    if (position < 0 || position > this.#buffer.byteLength) {
       throw new Error("非法的位置");
     }
-    this.position = position;
+    this.#position = position;
   }
 
   /**
@@ -199,21 +199,21 @@ export class BinaryWriter {
    * @param bytes - 需要写入的字节数
    */
   private ensureAvailable(bytes: number) {
-    const requiredSize = bytes + this.position;
-    if (requiredSize <= this.buffer.byteLength) {
+    const requiredSize = bytes + this.#position;
+    if (requiredSize <= this.#buffer.byteLength) {
       return;
     }
 
     // 计算新的缓冲区大小
     let newSize = Math.max(
-      this.buffer.byteLength * 2,
+      this.#buffer.byteLength * 2,
       requiredSize + MIN_GROWTH
     );
 
     // 创建新的缓冲区
     const newBuffer = new Uint8Array(newSize);
-    newBuffer.set(this.buffer);
-    this.buffer = newBuffer;
-    this.view = new DataView(this.buffer.buffer);
+    newBuffer.set(this.#buffer);
+    this.#buffer = newBuffer;
+    this.#view = new DataView(this.#buffer.buffer);
   }
 }
