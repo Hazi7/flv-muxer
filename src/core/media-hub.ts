@@ -53,68 +53,20 @@ export class MediaHub extends EventBus {
     return MediaHub.instance;
   }
 
-  addChunk(chunk: MediaChunk) {
-    // 处理序列数据，直接发送
-    if (chunk.type === "AAC_SE" || chunk.type === "AVC_SE") {
+  pushAudioChunk(chunk: MediaChunk) {
+    if (chunk.type === "AAC_SE") {
       this.emit("chunk", chunk);
-
-      return;
-    }
-
-    if (chunk.type === "AAC_RAW") {
-      // 如果是单轨道，直接发布数据
-      if (this.tracks.some((track) => !track)) {
-        this.emit("chunk", chunk);
-      } else {
-        if (this.videoEncoderTrack && this.audioEncoderTrack) {
-          if (this.videoEncoderTrack) {
-            if (chunk.timestamp <= this.videoEncoderTrack.lastTimestamp) {
-              this.emit("chunk", chunk);
-            }
-            const buffer = this.videoEncoderTrack.buffer;
-            const peekedChunk = buffer.peek();
-            while (
-              buffer.length > 0 &&
-              peekedChunk &&
-              peekedChunk.timestamp <= chunk.timestamp
-            ) {
-              const chunk = this.audioEncoderTrack.buffer.dequeue();
-              this.emit("chunk", chunk);
-            }
-          }
-        }
-      }
-
-      return;
-    }
-
-    if (chunk.type === "AVC_NALU") {
-      // 如果是单轨道，直接发布数据
-      if (this.tracks.some((track) => !track)) {
-        this.emit("chunk", chunk);
-      } else {
-        // 是双轨道
-        if (this.audioEncoderTrack && this.videoEncoderTrack) {
-          if (chunk.timestamp <= this.audioEncoderTrack.lastTimestamp) {
-            this.emit("chunk", chunk);
-          }
-          const buffer = this.audioEncoderTrack.buffer;
-          const peekedChunk = buffer.peek();
-
-          while (
-            buffer.length > 0 &&
-            peekedChunk &&
-            peekedChunk.timestamp <= chunk.timestamp
-          ) {
-            const chunk = this.videoEncoderTrack.buffer.dequeue();
-            this.emit("chunk", chunk);
-          }
-        }
-      }
-
-      return;
     }
   }
+
+  pushVideoChunk(chunk: MediaChunk) {
+    if (chunk.type === "AAC_SE") {
+      this.emit("chunk", chunk);
+    }
+
+  }
+
+  processQueue() {}
 
   start(audio: boolean, video: boolean) {
     if (audio && this.audioEncoderTrack) {

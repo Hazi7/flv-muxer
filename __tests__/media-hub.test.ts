@@ -1,6 +1,7 @@
 import { beforeEach, describe, it } from "vitest";
 import { MediaHub } from "../src/core/media-hub";
 import { expect } from "vitest";
+import { AudioEncoderTrack } from "../src/core/encoder-track";
 
 describe("MediaHub", () => {
   let mediaHub: MediaHub;

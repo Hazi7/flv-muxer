@@ -1,7 +1,7 @@
 import { MediaHub } from "./media-hub";
 import { RingBuffer } from "./ring-buffer";
 
-interface TrackChunk {
+export interface TrackChunk {
   type: "AAC_RAW" | "AAC_SE" | "AVC_SE" | "AVC_NALU";
   data: Uint8Array;
   // PTS
@@ -34,9 +34,11 @@ export abstract class BaseEncoderTrack {
   encoder!: VideoEncoder | AudioEncoder;
   buffer: RingBuffer<TrackChunk>;
   mediaHub: MediaHub;
+
   state: TrackState;
   lastTimestamp: number = 0;
-  _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
+
+  private _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
 
   get decoderConfig(): VideoDecoderConfig | undefined {
     return this._decoderConfig;
@@ -50,25 +52,34 @@ export abstract class BaseEncoderTrack {
     track: MediaStreamTrack,
     config: VideoEncoderConfig | AudioEncoderConfig
   ) {
-    // 初始化 Processor
     this.processor = new MediaStreamTrackProcessor({
       track,
     });
-
-    // 初始化编码器
     this.initEncoder(config);
 
     this.mediaHub = MediaHub.getInstance();
     this.state = TrackState.getInstance();
+
     this.buffer = new RingBuffer(16);
   }
+
+  protected abstract handleOutput(
+    chunk: EncodedMediaChunk,
+    metadata?: EncodedMediaChunkMetadata
+  ): void;
 
   protected abstract initEncoder(
     config: VideoEncoderConfig | AudioEncoderConfig
   ): void;
 
-  enqueue(chunk: TrackChunk) {
-    this.buffer.enqueue(chunk);
+  abstract start(): Promise<void>;
+
+  async stop(): Promise<void> {
+    await this.encoder.flush();
+  }
+
+  async close(): Promise<void> {
+    this.encoder.close();
   }
 
   calculateTimestamp(timestamp: number) {
@@ -78,21 +89,11 @@ export abstract class BaseEncoderTrack {
 
     return Math.max(0, (timestamp - this.state.baseTimestamp) / 1000);
   }
-
-  async stop(): Promise<void> {
-    await this.encoder.flush();
-  }
-
-  abstract start(): Promise<void>;
-
-  abstract handleOutput(
-    chunk: EncodedMediaChunk,
-    metadata?: EncodedMediaChunkMetadata
-  ): void;
 }
 
 export class VideoEncoderTrack extends BaseEncoderTrack {
   private frameCount: number = 0;
+
   constructor(track: MediaStreamTrack, config: VideoEncoderConfig) {
     super(track, config);
   }
@@ -128,7 +129,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     try {
       // 添加视频元数据到缓冲区
       if (metadata?.decoderConfig?.description) {
-        this.mediaHub.addChunk({
+        this.mediaHub.pushVideoChunk({
           type: "AVC_SE",
           data: new Uint8Array(
             metadata?.decoderConfig?.description as ArrayBuffer
@@ -144,7 +145,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
       // 添加视频数据到缓冲区
       const timestamp = this.calculateTimestamp(chunk.timestamp);
-      this.mediaHub.addChunk({
+      this.mediaHub.pushVideoChunk({
         type: "AVC_NALU",
         data,
         timestamp,
@@ -158,38 +159,6 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 }
 
 export class AudioEncoderTrack extends BaseEncoderTrack {
-  handleOutput(chunk: EncodedMediaChunk, metadata?: EncodedMediaChunkMetadata) {
-    try {
-      // 如果是关键帧，则添加音频解码器配置
-      if (metadata?.decoderConfig?.description) {
-        this.mediaHub.addChunk({
-          type: "AAC_SE",
-          data: new Uint8Array(
-            metadata?.decoderConfig?.description as ArrayBuffer
-          ),
-          timestamp: 0,
-          isKey: true,
-        });
-      }
-
-      // 将 EncodedAudioChunk 转为 Uint8Array
-      const data = new Uint8Array(chunk.byteLength);
-      chunk.copyTo(data);
-
-      // 添加音频数据到缓冲区
-      const timestamp = super.calculateTimestamp(chunk.timestamp); // 转换成相对时间戳
-      this.mediaHub.addChunk({
-        type: "AAC_RAW",
-        data,
-        timestamp,
-        isKey: chunk.type === "key",
-      });
-      this.lastTimestamp = chunk.timestamp;
-    } catch (error) {
-      console.error(`Failed to handle audio chunk: ${error}`);
-    }
-  }
-
   protected initEncoder(config: AudioEncoderConfig): void {
     this.encoder = new AudioEncoder({
       output: this.handleOutput.bind(this),
@@ -212,5 +181,37 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
         },
       })
     );
+  }
+
+  handleOutput(chunk: EncodedMediaChunk, metadata?: EncodedMediaChunkMetadata) {
+    try {
+      // 如果是关键帧，则添加音频解码器配置
+      if (metadata?.decoderConfig?.description) {
+        this.mediaHub.pushAudioChunk({
+          type: "AAC_SE",
+          data: new Uint8Array(
+            metadata?.decoderConfig?.description as ArrayBuffer
+          ),
+          timestamp: 0,
+          isKey: true,
+        });
+      }
+
+      // 将 EncodedAudioChunk 转为 Uint8Array
+      const data = new Uint8Array(chunk.byteLength);
+      chunk.copyTo(data);
+
+      // 添加音频数据到缓冲区
+      const timestamp = super.calculateTimestamp(chunk.timestamp); // 转换成相对时间戳
+      this.mediaHub.pushAudioChunk({
+        type: "AAC_RAW",
+        data,
+        timestamp,
+        isKey: chunk.type === "key",
+      });
+      this.lastTimestamp = chunk.timestamp;
+    } catch (error) {
+      console.error(`Failed to handle audio chunk: ${error}`);
+    }
   }
 }
