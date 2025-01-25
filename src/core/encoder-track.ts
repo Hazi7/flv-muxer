@@ -1,14 +1,5 @@
-import { StreamMerge } from "./stream-merge";
+import { StreamMerge, type TrackChunk } from "./stream-merge";
 import { RingBuffer } from "./ring-buffer";
-
-export interface TrackChunk {
-  type: "AAC_RAW" | "AAC_SE" | "AVC_SE" | "AVC_NALU";
-  data: Uint8Array;
-  // PTS
-  // [https://w3c.github.io/webcodecs/#dom-encodedvideochunk-timestamp-slot]
-  timestamp: number;
-  isKey: boolean;
-}
 
 type EncodedMediaChunk = EncodedAudioChunk | EncodedVideoChunk;
 type EncodedMediaChunkMetadata =

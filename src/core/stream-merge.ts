@@ -4,7 +4,7 @@ import {
 } from "./encoder-track";
 import { EventBus } from "./event-bus";
 
-export interface MediaChunk {
+export interface TrackChunk {
   type: "AAC_RAW" | "AAC_SE" | "AVC_SE" | "AVC_NALU";
   data: Uint8Array;
   // PTS
@@ -14,7 +14,7 @@ export interface MediaChunk {
 }
 
 export class StreamMerge {
-    eventBus: EventBus;
+  eventBus: EventBus;
   #tracks: [AudioEncoderTrack | undefined, VideoEncoderTrack | undefined] = [
     undefined,
     undefined,
@@ -45,13 +45,13 @@ export class StreamMerge {
     this.eventBus = EventBus.getInstance();
   }
 
-  pushAudioChunk(chunk: MediaChunk) {
+  pushAudioChunk(chunk: TrackChunk) {
     if (chunk.type === "AAC_SE") {
       this.eventBus.emit("chunk", chunk);
     }
   }
 
-  pushVideoChunk(chunk: MediaChunk) {
+  pushVideoChunk(chunk: TrackChunk) {
     if (chunk.type === "AAC_SE") {
       this.eventBus.emit("chunk", chunk);
     }

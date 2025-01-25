@@ -1,12 +1,12 @@
 import type { FlvEncoder } from "../core/flv-encoder";
-import type { MediaChunk } from "../core/stream-merge";
+import type { TrackChunk } from "../core/stream-merge";
 
 export interface MuxStrategy {
-  process(chunk: MediaChunk, encoder: FlvEncoder): Uint8Array | undefined;
+  process(chunk: TrackChunk, encoder: FlvEncoder): Uint8Array | undefined;
 }
 
 export class AACRawStrategy implements MuxStrategy {
-  process(chunk: MediaChunk, encoder: FlvEncoder): Uint8Array | undefined {
+  process(chunk: TrackChunk, encoder: FlvEncoder): Uint8Array | undefined {
     return encoder.encodeAudioTag<"AAC">({
       aacPacketType: "AACRaw",
       audioData: chunk.data,
@@ -20,7 +20,7 @@ export class AACRawStrategy implements MuxStrategy {
 }
 
 export class AACSEStrategy implements MuxStrategy {
-  process(chunk: MediaChunk, encoder: FlvEncoder): Uint8Array | undefined {
+  process(chunk: TrackChunk, encoder: FlvEncoder): Uint8Array | undefined {
     return encoder.encodeAudioTag<"AAC">({
       aacPacketType: "AACSequenceHeader",
       audioData: chunk.data,
@@ -34,7 +34,7 @@ export class AACSEStrategy implements MuxStrategy {
 }
 
 export class AVCSEStrategy implements MuxStrategy {
-  process(chunk: MediaChunk, encoder: FlvEncoder): Uint8Array | undefined {
+  process(chunk: TrackChunk, encoder: FlvEncoder): Uint8Array | undefined {
     return encoder.encodeVideoTag(
       "KeyFrame",
       "AVC",
@@ -47,7 +47,7 @@ export class AVCSEStrategy implements MuxStrategy {
 }
 
 export class AVCNALUStrategy implements MuxStrategy {
-  process(chunk: MediaChunk, encoder: FlvEncoder): Uint8Array | undefined {
+  process(chunk: TrackChunk, encoder: FlvEncoder): Uint8Array | undefined {
     return encoder.encodeVideoTag(
       chunk.isKey ? "KeyFrame" : "InterFrame",
       "AVC",

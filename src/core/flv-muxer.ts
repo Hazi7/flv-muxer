@@ -7,7 +7,7 @@ import {
 } from "../strategies/mux-strategy";
 import { EventBus } from "./event-bus";
 import { FlvEncoder } from "./flv-encoder";
-import { type MediaChunk } from "./stream-merge";
+import { type TrackChunk } from "./stream-merge";
 
 export interface MuxerOptions {
   video: {
@@ -152,7 +152,7 @@ export class FlvMuxer {
     }
   }
 
-  private muxChunk(chunk: MediaChunk) {
+  private muxChunk(chunk: TrackChunk) {
     if (!chunk) return;
 
     const strategy = this.#strategies[chunk.type];
