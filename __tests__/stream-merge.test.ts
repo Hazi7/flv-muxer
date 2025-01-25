@@ -1,64 +1,64 @@
 import { beforeEach, describe, it } from "vitest";
-import { MediaHub } from "../src/core/media-hub";
 import { expect } from "vitest";
 import { AudioEncoderTrack } from "../src/core/encoder-track";
+import { StreamMerge } from "../src/core/stream-merge";
 
 describe("MediaHub", () => {
-  let mediaHub: MediaHub;
+  let streamMerge: StreamMerge;
 
   beforeEach(() => {
-    mediaHub = MediaHub.getInstance();
+    streamMerge = new StreamMerge();
   });
 
   it("时间戳应正确排序 1", () => {
     let result = [];
-    mediaHub.on("chunk", (chunk) => {
+    streamMerge.eventBus.on("chunk", (chunk) => {
       result.push(chunk.timestamp);
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_SE",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 0,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_RAW",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 0,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_RAW",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 21.333,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushVideoChunk({
       type: "AVC_SE",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 0,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushVideoChunk({
       type: "AVC_NALU",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 20.683,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushVideoChunk({
       type: "AVC_NALU",
       data: new Uint8Array(),
       isKey: false,
       timestamp: 57.579,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_RAW",
       data: new Uint8Array(),
       isKey: false,
@@ -70,74 +70,74 @@ describe("MediaHub", () => {
 
   it("时间戳应正确排序 2", () => {
     let result = [];
-    mediaHub.on("chunk", (chunk) => {
+    streamMerge.eventBus.on("chunk", (chunk) => {
       result.push(chunk.timestamp);
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_SE",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 0,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_RAW",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 0,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_RAW",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 21.333,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushVideoChunk({
       type: "AVC_SE",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 0,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushVideoChunk({
       type: "AVC_NALU",
       data: new Uint8Array(),
       isKey: true,
       timestamp: 23.001,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushVideoChunk({
       type: "AVC_NALU",
       data: new Uint8Array(),
       isKey: false,
       timestamp: 56.07,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_RAW",
       data: new Uint8Array(),
       isKey: false,
       timestamp: 42.666,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_RAW",
       data: new Uint8Array(),
       isKey: false,
       timestamp: 64,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushVideoChunk({
       type: "AVC_NALU",
       data: new Uint8Array(),
       isKey: false,
       timestamp: 87.304,
     });
 
-    mediaHub.addChunk({
+    streamMerge.pushAudioChunk({
       type: "AAC_RAW",
       data: new Uint8Array(),
       isKey: false,

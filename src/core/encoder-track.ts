@@ -31,7 +31,7 @@ class TrackState {
 
 export abstract class BaseEncoderTrack {
   readonly processor: MediaStreamTrackProcessor;
-  readonly mediaProcessor: StreamMerge;
+  readonly streamMerge: StreamMerge;
   readonly buffer: RingBuffer<TrackChunk>;
   encoder!: VideoEncoder | AudioEncoder;
 
@@ -53,7 +53,7 @@ export abstract class BaseEncoderTrack {
     config: VideoEncoderConfig | AudioEncoderConfig
   ) {
     this.processor = new MediaStreamTrackProcessor({ track });
-    this.mediaProcessor = new StreamMerge();
+    this.streamMerge = new StreamMerge();
     this.buffer = new RingBuffer(16);
 
     this.initEncoder(config);
@@ -127,7 +127,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     try {
       // 添加视频元数据到缓冲区
       if (metadata?.decoderConfig?.description) {
-        this.mediaProcessor.pushVideoChunk({
+        this.streamMerge.pushVideoChunk({
           type: "AVC_SE",
           data: new Uint8Array(
             metadata?.decoderConfig?.description as ArrayBuffer
@@ -143,7 +143,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
       // 添加视频数据到缓冲区
       const timestamp = this.calculateTimestamp(chunk.timestamp);
-      this.mediaProcessor.pushVideoChunk({
+      this.streamMerge.pushVideoChunk({
         type: "AVC_NALU",
         data,
         timestamp,
@@ -185,7 +185,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
     try {
       // 如果是关键帧，则添加音频解码器配置
       if (metadata?.decoderConfig?.description) {
-        this.mediaProcessor.pushAudioChunk({
+        this.streamMerge.pushAudioChunk({
           type: "AAC_SE",
           data: new Uint8Array(
             metadata?.decoderConfig?.description as ArrayBuffer
@@ -201,7 +201,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
 
       // 添加音频数据到缓冲区
       const timestamp = super.calculateTimestamp(chunk.timestamp); // 转换成相对时间戳
-      this.mediaProcessor.pushAudioChunk({
+      this.streamMerge.pushAudioChunk({
         type: "AAC_RAW",
         data,
         timestamp,
