@@ -13,7 +13,7 @@ export interface TrackChunk {
   isKey: boolean;
 }
 
-export class StreamMerge {
+export class StreamProcessor {
   eventBus: EventBus;
   #tracks: [AudioEncoderTrack | undefined, VideoEncoderTrack | undefined] = [
     undefined,
@@ -59,11 +59,11 @@ export class StreamMerge {
 
   processQueue() {}
 
-  start(audio: boolean, video: boolean) {
-    if (audio && this.audioEncoderTrack) {
+  start() {
+    if (this.audioEncoderTrack) {
       this.audioEncoderTrack.start();
     }
-    if (video && this.videoEncoderTrack) {
+    if (this.videoEncoderTrack) {
       this.videoEncoderTrack.start();
     }
   }

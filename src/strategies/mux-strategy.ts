@@ -1,5 +1,5 @@
 import type { FlvEncoder } from "../core/flv-encoder";
-import type { TrackChunk } from "../core/stream-merge";
+import type { TrackChunk } from "../core/stream-processor";
 
 export interface MuxStrategy {
   process(chunk: TrackChunk, encoder: FlvEncoder): Uint8Array | undefined;

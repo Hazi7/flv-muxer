@@ -5,9 +5,10 @@ import {
   AVCSEStrategy,
   AVCNALUStrategy,
 } from "../strategies/mux-strategy";
+import { AudioEncoderTrack, VideoEncoderTrack } from "./encoder-track";
 import { EventBus } from "./event-bus";
 import { FlvEncoder } from "./flv-encoder";
-import { type TrackChunk } from "./stream-merge";
+import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
 export interface MuxerOptions {
   video: {
@@ -23,6 +24,7 @@ export interface MuxerOptions {
 export class FlvMuxer {
   readonly #encoder: FlvEncoder;
   readonly #eventBus: EventBus;
+  readonly #streamProcessor: StreamProcessor;
   #options: MuxerOptions | undefined;
   #sourceStream: ReadableStream | undefined;
   #muxStream: TransformStream | undefined;
@@ -32,6 +34,7 @@ export class FlvMuxer {
   constructor(writable: WritableStream) {
     this.#encoder = new FlvEncoder();
     this.#eventBus = EventBus.getInstance();
+    this.#streamProcessor = new StreamProcessor();
 
     this.#outputStream = writable;
 
@@ -96,11 +99,29 @@ export class FlvMuxer {
       throw new Error(`Error starting Muxer: ${error}`);
     }
 
-    // this.#mediaHub.start(!!this.#options.audio, !!this.#options.video);
+    this.#streamProcessor.start();
   }
 
-  async configure(config: MuxerOptions) {
-    this.#options = config;
+  async configure(options: MuxerOptions) {
+    this.#options = options;
+
+    const { track: audioTrack, config: audioConfig } = options.audio;
+
+    if (audioTrack && audioConfig) {
+      this.#streamProcessor.audioEncoderTrack = new AudioEncoderTrack(
+        audioTrack,
+        audioConfig
+      );
+    }
+
+    const { track: videoTrack, config: videoConfig } = options.video;
+
+    if (videoTrack && videoConfig) {
+      this.#streamProcessor.videoEncoderTrack = new VideoEncoderTrack(
+        videoTrack,
+        videoConfig
+      );
+    }
   }
 
   async stop() {

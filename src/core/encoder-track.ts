@@ -1,4 +1,4 @@
-import { StreamMerge, type TrackChunk } from "./stream-merge";
+import { StreamProcessor, type TrackChunk } from "./stream-processor";
 import { RingBuffer } from "./ring-buffer";
 
 type EncodedMediaChunk = EncodedAudioChunk | EncodedVideoChunk;
@@ -22,7 +22,7 @@ class TrackState {
 
 export abstract class BaseEncoderTrack {
   readonly processor: MediaStreamTrackProcessor;
-  readonly streamMerge: StreamMerge;
+  readonly streamMerge: StreamProcessor;
   readonly buffer: RingBuffer<TrackChunk>;
   encoder!: VideoEncoder | AudioEncoder;
 
@@ -44,7 +44,7 @@ export abstract class BaseEncoderTrack {
     config: VideoEncoderConfig | AudioEncoderConfig
   ) {
     this.processor = new MediaStreamTrackProcessor({ track });
-    this.streamMerge = new StreamMerge();
+    this.streamMerge = new StreamProcessor();
     this.buffer = new RingBuffer(16);
 
     this.initEncoder(config);

@@ -1,13 +1,13 @@
 import { beforeEach, describe, it } from "vitest";
 import { expect } from "vitest";
 import { AudioEncoderTrack } from "../src/core/encoder-track";
-import { StreamMerge } from "../src/core/stream-merge";
+import { StreamProcessor } from "../src/core/stream-processor";
 
 describe("MediaHub", () => {
-  let streamMerge: StreamMerge;
+  let streamMerge: StreamProcessor;
 
   beforeEach(() => {
-    streamMerge = new StreamMerge();
+    streamMerge = new StreamProcessor();
   });
 
   it("时间戳应正确排序 1", () => {
