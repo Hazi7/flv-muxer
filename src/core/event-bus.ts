@@ -66,11 +66,4 @@ export class EventBus {
   clear(): void {
     this.#events.clear();
   }
-
-  // 获取特定事件的监听器数量
-  listenerCount(eventName: string): number {
-    return this.#events.has(eventName)
-      ? this.#events.get(eventName)!.length
-      : 0;
-  }
 }

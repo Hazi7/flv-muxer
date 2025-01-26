@@ -10,13 +10,14 @@
     ],
     "skipLibCheck": true,
     /* Bundler mode */
-    "outDir": "dist",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "declaration": true,
     "emitDeclarationOnly": true,
+    "outDir": "dist",
+    "declarationDir": "dist/types",
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

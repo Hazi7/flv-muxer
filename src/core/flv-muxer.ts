@@ -21,6 +21,9 @@ export interface MuxerOptions {
   };
 }
 
+/**
+ * FLV 多路复用器类
+ */
 export class FlvMuxer {
   readonly #encoder: FlvEncoder;
   readonly #eventBus: EventBus;
@@ -31,6 +34,10 @@ export class FlvMuxer {
   #outputStream: WritableStream | undefined;
   #strategies: { [key: string]: MuxStrategy } = {};
 
+  /**
+   * 构造函数
+   * @param writable - 输出的可写流
+   */
   constructor(writable: WritableStream) {
     this.#encoder = new FlvEncoder();
     this.#eventBus = EventBus.getInstance();
@@ -39,54 +46,70 @@ export class FlvMuxer {
     this.#outputStream = writable;
 
     // 初始化策略
-    this.initStrategies();
+    this.#initStrategies();
   }
 
-  private initSourceStream() {
-    this.#sourceStream = new ReadableStream({
-      start: (controller) => {
-        this.#eventBus.on("chunk", (chunk) => {
-          controller.enqueue(chunk);
-        });
-      },
-      cancel: () => {},
-    });
-  }
-
-  private initMuxStream() {
-    this.#muxStream = new TransformStream({
-      start: async (controller) => {
-        const header = this.#encoder.encodeFlvHeader(
-          !!this.#options?.video,
-          !!this.#options?.audio
-        );
-        const metadata = this.encodeMetadata();
-        controller.enqueue(header);
-        controller.enqueue(metadata);
-      },
-      transform: (chunk, controller) => {
-        const tag = this.muxChunk(chunk);
-        controller.enqueue(tag);
-      },
-      flush: (controller) => {},
-    });
-  }
-
-  private initStrategies() {
+  /**
+   * 初始化多路复用策略
+   */
+  #initStrategies() {
     this.#strategies["AAC_RAW"] = new AACRawStrategy();
     this.#strategies["AAC_SE"] = new AACSEStrategy();
     this.#strategies["AVC_SE"] = new AVCSEStrategy();
     this.#strategies["AVC_NALU"] = new AVCNALUStrategy();
   }
 
+  /**
+   * 初始化源流
+   */
+  #initSourceStream() {
+    this.#sourceStream = new ReadableStream({
+      start: (controller) => {
+        this.#eventBus.on("chunk", (chunk) => {
+          controller.enqueue(chunk);
+        });
+      },
+      cancel: () => {
+        // TODO 释放资源
+      },
+    });
+  }
+
+  /**
+   * 初始化多路复用流
+   */
+  #initMuxStream() {
+    this.#muxStream = new TransformStream({
+      start: async (controller) => {
+        const header = this.#encoder.encodeFlvHeader(
+          !!this.#options?.video,
+          !!this.#options?.audio
+        );
+        const metadata = this.#encodeMetadata();
+        controller.enqueue(header);
+        controller.enqueue(metadata);
+      },
+      transform: (chunk, controller) => {
+        const tag = this.#muxChunk(chunk);
+        controller.enqueue(tag);
+      },
+      flush: (controller) => {
+        // TODO 释放资源
+      },
+    });
+  }
+
+  /**
+   * 启动多路复用器
+   */
   async start() {
     if (!this.#options) {
       throw new Error("Muxer not configured. Call configure() first.");
     }
 
     try {
-      this.initSourceStream();
-      this.initMuxStream();
+      this.#initSourceStream();
+      this.#initMuxStream();
 
       if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
         throw new Error("Failed to initialize streams");
@@ -102,6 +125,10 @@ export class FlvMuxer {
     this.#streamProcessor.start();
   }
 
+  /**
+   * 配置多路复用器选项
+   * @param options - 多路复用器选项
+   */
   async configure(options: MuxerOptions) {
     this.#options = options;
 
@@ -124,10 +151,11 @@ export class FlvMuxer {
     }
   }
 
+  /**
+   * 停止多路复用器
+   */
   async stop() {
     try {
-      this.#eventBus;
-
       this.#sourceStream = undefined;
       this.#outputStream = undefined;
     } catch (error) {}
@@ -136,7 +164,7 @@ export class FlvMuxer {
   /**
    * 将元数据写入FLV流。
    */
-  private encodeMetadata() {
+  #encodeMetadata() {
     try {
       const metadata: Record<string, any> = {
         duration: 0,
@@ -159,7 +187,7 @@ export class FlvMuxer {
 
         Object.assign(metadata, {
           audiocodecid: 10,
-          audiodatarate: config.bitrate,
+          audiodatarate: config.bitrate || 128,
           stereo: true,
           audiosamplerate: config.sampleRate,
         });
@@ -173,7 +201,11 @@ export class FlvMuxer {
     }
   }
 
-  private muxChunk(chunk: TrackChunk) {
+  /**
+   * 处理数据块
+   * @param chunk - 数据块
+   */
+  #muxChunk(chunk: TrackChunk) {
     if (!chunk) return;
 
     const strategy = this.#strategies[chunk.type];

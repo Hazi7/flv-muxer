@@ -6,6 +6,7 @@ import { defineConfig } from "rollup";
 import { dts } from "rollup-plugin-dts";
 
 const pkg = JSON.parse(readFileSync("./package.json", { encoding: "utf-8" }));
+const isProduction = process.env.NODE_ENV === "production";
 
 export default defineConfig([
   {
@@ -14,22 +15,24 @@ export default defineConfig([
       {
         file: pkg.exports.import,
         format: "es",
+        sourcemap: !isProduction,
       },
       {
         file: pkg.exports.require,
         format: "cjs",
+        sourcemap: !isProduction,
       },
       {
         file: "./dist/flv-muxer.iife.js",
         format: "iife",
-        name: "MyBundle",
-        sourcemap: true,
+        name: "FlvMuxer",
+        sourcemap: !isProduction,
       },
     ],
     plugins: [typescript(), resolve(), commonjs()],
   },
   {
-    input: "dist/main.d.ts",
+    input: "dist/types/main.d.ts",
     output: [
       {
         file: pkg.exports.import.replace(/\.js$/, ".d.ts"),
