@@ -57,8 +57,6 @@ export class StreamProcessor {
     }
   }
 
-  processQueue() {}
-
   start() {
     if (this.audioEncoderTrack) {
       this.audioEncoderTrack.start();
@@ -69,4 +67,8 @@ export class StreamProcessor {
   }
 
   flush() {}
+
+  close() {}
+
+  #processQueue() {}
 }
