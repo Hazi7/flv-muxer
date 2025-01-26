@@ -64,8 +64,8 @@ export class FlvMuxer {
    */
   #initSourceStream() {
     this.#sourceStream = new ReadableStream({
-      start: (controller) => {
-        this.#eventBus.on("chunk", (chunk) => {
+      start: controller => {
+        this.#eventBus.on("chunk", chunk => {
           controller.enqueue(chunk);
         });
       },
@@ -80,7 +80,7 @@ export class FlvMuxer {
    */
   #initMuxStream() {
     this.#muxStream = new TransformStream({
-      start: async (controller) => {
+      start: async controller => {
         const header = this.#encoder.encodeFlvHeader(
           !!this.#options?.video,
           !!this.#options?.audio
@@ -93,7 +93,7 @@ export class FlvMuxer {
         const tag = this.#muxChunk(chunk);
         controller.enqueue(tag);
       },
-      flush: (controller) => {
+      flush: controller => {
         // TODO 释放资源
       },
     });
@@ -156,8 +156,6 @@ export class FlvMuxer {
    */
   async stop() {
     try {
-      this.#eventBus;
-
       this.#sourceStream = undefined;
       this.#outputStream = undefined;
     } catch (error) {}
@@ -189,7 +187,7 @@ export class FlvMuxer {
 
         Object.assign(metadata, {
           audiocodecid: 10,
-          audiodatarate: config.bitrate,
+          audiodatarate: config.bitrate || 128,
           stereo: true,
           audiosamplerate: config.sampleRate,
         });
