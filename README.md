@@ -22,5 +22,5 @@ Install from NPM by running the following command:
 Download from a CDN link:
 
 ```html
-  <script src=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/flv-muxer@latest/dist/flv-muxer.iife.js"></script>
 ```
