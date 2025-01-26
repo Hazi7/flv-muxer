@@ -17,20 +17,9 @@ type EncodedMediaChunkMetadata =
  * 单例类，用于管理轨道状态
  */
 class TrackState {
-  /**
-   * 单例实例
-   */
   static #instance: TrackState;
 
-  /**
-   * 基础时间戳，用于计算相对时间戳
-   */
   baseTimestamp: number = 0;
-
-  /**
-   * 私有构造函数，防止外部实例化
-   */
-  constructor() {}
 
   /**
    * 获取 TrackState 的单例实例
@@ -49,53 +38,20 @@ class TrackState {
  * 抽象基类，用于处理编码轨道
  */
 export abstract class BaseEncoderTrack {
-  /**
-   * 媒体流轨道处理器
-   */
   readonly processor: MediaStreamTrackProcessor;
-
-  /**
-   * 流处理器，用于合并流
-   */
-  readonly streamMerge: StreamProcessor;
-
-  /**
-   * 环形缓冲区，用于存储轨道块
-   */
+  readonly streamProcessor: StreamProcessor;
   readonly buffer: RingBuffer<TrackChunk>;
 
-  /**
-   * 视频或音频编码器
-   */
   encoder!: VideoEncoder | AudioEncoder;
-
-  /**
-   * 轨道状态实例
-   */
   state: TrackState;
-
-  /**
-   * 上一个时间戳
-   */
   lastTimestamp: number = 0;
 
-  /**
-   * 私有解码器配置
-   */
   private _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
 
-  /**
-   * 获取解码器配置
-   * @returns 解码器配置
-   */
   get decoderConfig(): VideoDecoderConfig | undefined {
     return this._decoderConfig;
   }
 
-  /**
-   * 设置解码器配置
-   * @param config 解码器配置
-   */
   set decoderConfig(config: VideoDecoderConfig) {
     this._decoderConfig = config;
   }
@@ -110,7 +66,7 @@ export abstract class BaseEncoderTrack {
     config: VideoEncoderConfig | AudioEncoderConfig
   ) {
     this.processor = new MediaStreamTrackProcessor({ track });
-    this.streamMerge = new StreamProcessor();
+    this.streamProcessor = StreamProcessor.getInstance();
     this.buffer = new RingBuffer(16);
 
     this.initEncoder(config);
@@ -176,9 +132,6 @@ export abstract class BaseEncoderTrack {
  * 视频编码轨道类，继承自 BaseEncoderTrack
  */
 export class VideoEncoderTrack extends BaseEncoderTrack {
-  /**
-   * 帧计数器
-   */
   private frameCount: number = 0;
 
   /**
@@ -234,7 +187,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     try {
       // 添加视频元数据到缓冲区
       if (metadata?.decoderConfig?.description) {
-        this.streamMerge.pushVideoChunk({
+        this.streamProcessor.pushVideoChunk({
           type: "AVC_SE",
           data: new Uint8Array(
             metadata?.decoderConfig?.description as ArrayBuffer
@@ -250,13 +203,13 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
       // 添加视频数据到缓冲区
       const timestamp = this.calculateTimestamp(chunk.timestamp);
-      this.streamMerge.pushVideoChunk({
+      this.streamProcessor.pushVideoChunk({
         type: "AVC_NALU",
         data,
         timestamp,
         isKey: chunk.type === "key",
       });
-      this.lastTimestamp = chunk.timestamp;
+      this.lastTimestamp = timestamp;
     } catch (error) {
       console.error(`Failed to handle video chunk: ${error}`);
     }
@@ -308,7 +261,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
     try {
       // 如果是关键帧，则添加音频解码器配置
       if (metadata?.decoderConfig?.description) {
-        this.streamMerge.pushAudioChunk({
+        this.streamProcessor.pushAudioChunk({
           type: "AAC_SE",
           data: new Uint8Array(
             metadata?.decoderConfig?.description as ArrayBuffer
@@ -324,13 +277,13 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
 
       // 添加音频数据到缓冲区
       const timestamp = super.calculateTimestamp(chunk.timestamp); // 转换成相对时间戳
-      this.streamMerge.pushAudioChunk({
+      this.streamProcessor.pushAudioChunk({
         type: "AAC_RAW",
         data,
         timestamp,
         isKey: chunk.type === "key",
       });
-      this.lastTimestamp = chunk.timestamp;
+      this.lastTimestamp = timestamp;
     } catch (error) {
       console.error(`Failed to handle audio chunk: ${error}`);
     }
