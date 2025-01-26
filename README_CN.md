@@ -22,5 +22,5 @@
 从 CDN 链接下载：
 
 ```html
-  <script src=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/flv-muxer@latest/dist/flv-muxer.iife.js"></script>
 ```
