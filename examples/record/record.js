@@ -13,12 +13,11 @@ async function getDisplayMedia() {
 
 let recordingChunks = [];
 
-const ws = new WebSocket("ws://49.232.183.67:9998/live/first");
-
+// const ws = new WebSocket("ws://49.232.183.67:9998/live/first");
 const writable = new WritableStream({
-  write: chunk => {
-    // recordingChunks.push(chunk);
-    ws.send(chunk);
+  write: (chunk) => {
+    recordingChunks.push(chunk);
+    // ws.send(chunk);
   },
 });
 
@@ -28,7 +27,7 @@ async function startRecording() {
   const videoTrack = stream.getVideoTracks()[0];
   const audioTrack = stream.getAudioTracks()[0];
 
-  const flvMuxer = new MyBundle.FlvMuxer(writable);
+  const flvMuxer = new FlvMuxer(writable);
 
   flvMuxer.configure({
     video: {

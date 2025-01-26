@@ -1,1 +1,3 @@
-export { FlvMuxer } from "./core/flv-muxer";
+import { FlvMuxer } from "./core/flv-muxer";
+
+export default FlvMuxer;

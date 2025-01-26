@@ -1,6 +1,6 @@
 {
   "name": "flv-muxer",
-  "version": "0.0.7",
+  "version": "0.0.9",
   "type": "module",
   "main": "dist/flv-muxer.js",
   "types": "dist/flv-muxer.d.ts",
@@ -12,6 +12,8 @@
   "license": "ISC",
   "scripts": {
     "build": "rollup -c --configPlugin @rollup/plugin-typescript",
+    "build:prod": "NODE_ENV=production rollup -c --configPlugin @rollup/plugin-typescript",
+    "build:dev": "NODE_ENV=development rollup -c --configPlugin @rollup/plugin-typescript",
     "test": "vitest",
     "coverage": "vitest run --coverage"
   },
@@ -24,9 +26,12 @@
     "url": "https://github.com/Hazi7/flv-muxer.git"
   },
   "files": [
+    "!dist/types",
     "dist",
     "package.json",
-    "README.md"
+    "LICENSE",
+    "README.md",
+    "README_CN.md"
   ],
   "devDependencies": {
     "@eslint/js": "^9.19.0",
