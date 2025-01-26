@@ -1,17 +1,17 @@
 import { beforeEach, describe, it } from "vitest";
 import { expect } from "vitest";
-import { AudioEncoderTrack } from "../src/core/encoder-track";
+
 import { StreamProcessor } from "../src/core/stream-processor";
 
 describe("MediaHub", () => {
   let streamMerge: StreamProcessor;
 
   beforeEach(() => {
-    streamMerge = new StreamProcessor();
+    streamMerge = StreamProcessor.getInstance();
   });
 
   it("时间戳应正确排序 1", () => {
-    let result = [];
+    const result = [];
     streamMerge.eventBus.on("chunk", (chunk) => {
       result.push(chunk.timestamp);
     });

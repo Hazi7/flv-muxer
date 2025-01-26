@@ -29,7 +29,7 @@ async function startRecording() {
 
   const flvMuxer = new FlvMuxer(writable);
 
-  flvMuxer.configure({
+  await flvMuxer.configure({
     video: {
       track: videoTrack,
       config: {
