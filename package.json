@@ -1,6 +1,6 @@
 {
   "name": "flv-muxer",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "type": "module",
   "main": "dist/flv-muxer.js",
   "types": "dist/flv-muxer.d.ts",
@@ -9,7 +9,7 @@
     "import": "./dist/flv-muxer.js",
     "require": "./dist/flv-muxer.cjs.js"
   },
-  "license": "ISC",
+  "license": "MIT",
   "scripts": {
     "build": "rollup -c --configPlugin @rollup/plugin-typescript",
     "build:prod": "NODE_ENV=production rollup -c --configPlugin @rollup/plugin-typescript",
