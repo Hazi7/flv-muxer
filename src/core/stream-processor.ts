@@ -97,40 +97,48 @@ export class StreamProcessor {
   close() {}
 
   #processAudioChunk(chunk: TrackChunk) {
-    const track = this.audioEncoderTrack!;
+    const audioTrack = this.audioEncoderTrack!;
+    const videoTrack = this.videoEncoderTrack!;
 
     if (!this.#audioConfigReady || !this.#videoConfigReady) {
-      track.enqueue(chunk);
+      audioTrack.enqueue(chunk);
       return;
     }
 
-    while (!track.isEmpty() && track.peek()!.timestamp <= chunk.timestamp) {
-      this.#eventBus.emit("chunk", track.dequeue());
+    while (
+      !videoTrack.isEmpty() &&
+      videoTrack.peek()!.timestamp <= chunk.timestamp
+    ) {
+      this.#eventBus.emit("chunk", videoTrack.dequeue());
     }
 
-    if (chunk.timestamp <= this.videoEncoderTrack!.lastTimestamp) {
+    if (chunk.timestamp <= videoTrack.lastTimestamp) {
       this.#eventBus.emit("chunk", chunk);
     } else {
-      track.enqueue(chunk);
+      audioTrack.enqueue(chunk);
     }
   }
 
   #processVideoChunk(chunk: TrackChunk) {
-    const track = this.videoEncoderTrack!;
+    const audioTrack = this.audioEncoderTrack!;
+    const videoTrack = this.videoEncoderTrack!;
 
     if (!this.#audioConfigReady || !this.#videoConfigReady) {
-      track.enqueue(chunk);
+      videoTrack.enqueue(chunk);
       return;
     }
 
-    while (!track.isEmpty() && track.peek()!.timestamp <= chunk.timestamp) {
-      this.#eventBus.emit("chunk", track.dequeue());
+    while (
+      !audioTrack.isEmpty() &&
+      audioTrack.peek()!.timestamp <= chunk.timestamp
+    ) {
+      this.#eventBus.emit("chunk", audioTrack.dequeue());
     }
 
-    if (chunk.timestamp <= this.audioEncoderTrack!.lastTimestamp) {
+    if (chunk.timestamp <= audioTrack.lastTimestamp) {
       this.#eventBus.emit("chunk", chunk);
     } else {
-      track.enqueue(chunk);
+      videoTrack.enqueue(chunk);
     }
   }
 }
