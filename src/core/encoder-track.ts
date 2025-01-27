@@ -167,6 +167,8 @@ export abstract class BaseEncoderTrack {
  */
 export class VideoEncoderTrack extends BaseEncoderTrack {
   private frameCount: number = 0;
+  private timer: number = 0;
+  private lastFrame: VideoFrame | undefined;
 
   /**
    * 构造函数
@@ -201,6 +203,8 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
       new WritableStream({
         write: (frame) => {
           // TODO 对外暴露 VideoFrame，以用于美颜算法、抠像等...
+
+          this.#scheduleFrameProcessing(frame.clone());
 
           if (this.encoder.encodeQueueSize < 2) {
             this.frameCount++;
@@ -245,6 +249,26 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     } catch (error) {
       console.error(`Failed to handle video chunk: ${error}`);
     }
+  }
+
+  #scheduleFrameProcessing(frame: VideoFrame) {
+    clearTimeout(this.timer);
+
+    this.lastFrame?.close();
+    this.lastFrame = frame;
+
+    this.timer = setTimeout(() => {
+      if (frame) {
+        const videoFrame = new VideoFrame(frame, {
+          duration: 1e6,
+          timestamp: frame.timestamp + 1e6,
+        });
+
+        this.encoder.encode(videoFrame as VideoFrame & AudioData);
+
+        this.#scheduleFrameProcessing(videoFrame);
+      }
+    }, 1e3) as unknown as number;
   }
 }
 
