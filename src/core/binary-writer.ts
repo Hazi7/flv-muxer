@@ -205,7 +205,7 @@ export class BinaryWriter {
     }
 
     // 计算新的缓冲区大小
-    let newSize = Math.max(
+    const newSize = Math.max(
       this.#buffer.byteLength * 2,
       requiredSize + MIN_GROWTH
     );

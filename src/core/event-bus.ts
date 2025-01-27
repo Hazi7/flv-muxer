@@ -4,7 +4,7 @@ export class EventBus {
   static #instance: EventBus;
   #events: Map<string, EventHandler[]>;
 
-  constructor() {
+  private constructor() {
     this.#events = new Map();
   }
 

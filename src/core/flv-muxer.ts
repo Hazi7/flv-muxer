@@ -41,7 +41,7 @@ export class FlvMuxer {
   constructor(writable: WritableStream) {
     this.#encoder = new FlvEncoder();
     this.#eventBus = EventBus.getInstance();
-    this.#streamProcessor = new StreamProcessor();
+    this.#streamProcessor = StreamProcessor.getInstance();
 
     this.#outputStream = writable;
 
@@ -135,18 +135,16 @@ export class FlvMuxer {
     const { track: audioTrack, config: audioConfig } = options.audio;
 
     if (audioTrack && audioConfig) {
-      this.#streamProcessor.audioEncoderTrack = new AudioEncoderTrack(
-        audioTrack,
-        audioConfig
+      this.#streamProcessor.addAudioTrack(
+        new AudioEncoderTrack(audioTrack, audioConfig)
       );
     }
 
     const { track: videoTrack, config: videoConfig } = options.video;
 
     if (videoTrack && videoConfig) {
-      this.#streamProcessor.videoEncoderTrack = new VideoEncoderTrack(
-        videoTrack,
-        videoConfig
+      this.#streamProcessor.addVideoTrack(
+        new VideoEncoderTrack(videoTrack, videoConfig)
       );
     }
   }
@@ -158,7 +156,13 @@ export class FlvMuxer {
     try {
       this.#sourceStream = undefined;
       this.#outputStream = undefined;
+
+      this.#streamProcessor.flush();
     } catch (error) {}
+  }
+
+  async dispose() {
+    this.#streamProcessor.close();
   }
 
   /**

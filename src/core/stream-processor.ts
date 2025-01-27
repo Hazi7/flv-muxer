@@ -14,114 +14,123 @@ export interface TrackChunk {
 }
 
 export class StreamProcessor {
-  eventBus: EventBus;
-  #tracks: [AudioEncoderTrack | undefined, VideoEncoderTrack | undefined] = [
-    undefined,
-    undefined,
-  ];
-
-  get audioEncoderTrack(): AudioEncoderTrack | undefined {
-    return this.#tracks[0];
-  }
-
-  set audioEncoderTrack(track: AudioEncoderTrack) {
-    this.#tracks[0] = track;
-  }
-
-  get videoEncoderTrack(): VideoEncoderTrack | undefined {
-    return this.#tracks[1];
-  }
-
-  set videoEncoderTrack(track: VideoEncoderTrack) {
-    this.#tracks[1] = track;
-  }
+  static instance: StreamProcessor;
+  #eventBus: EventBus;
+  audioEncoderTrack: AudioEncoderTrack | undefined;
+  videoEncoderTrack: VideoEncoderTrack | undefined;
+  #isProcessing: boolean = false;
+  #audioConfigReady: boolean = false;
+  #videoConfigReady: boolean = false;
 
   /**
    * 创建FlvStreamer的实例。
    * @param writable - 用于写入FLV数据的可写流。
    * @param options - FLV流的配置选项。
    */
-  constructor() {
-    this.eventBus = EventBus.getInstance();
+  private constructor() {
+    this.#eventBus = EventBus.getInstance();
   }
 
-  pushAudioChunk(chunk: TrackChunk) {
-    if (!this.videoEncoderTrack) {
-      this.eventBus.emit("chunk", chunk);
+  setAudioConfigReady() {
+    this.#audioConfigReady = true;
+  }
+
+  setVideoConfigReady() {
+    this.#videoConfigReady = true;
+  }
+
+  static getInstance() {
+    if (!this.instance) {
+      this.instance = new this();
+    }
+
+    return this.instance;
+  }
+
+  addAudioTrack(track: AudioEncoderTrack) {
+    this.audioEncoderTrack = track;
+  }
+
+  addVideoTrack(track: VideoEncoderTrack) {
+    this.videoEncoderTrack = track;
+  }
+
+  handleTrackChunk(chunk: TrackChunk) {
+    // 如果只有单个轨道，则发出该数据块
+    if (!this.audioEncoderTrack || !this.videoEncoderTrack) {
+      this.#eventBus.emit("chunk", chunk);
       return;
     }
 
-    if (chunk.type === "AAC_SE") {
-      this.eventBus.emit("chunk", chunk);
+    // 如果数据块是配置头（AAC_SE 或 AVC_SE），则发出该数据块
+    if (chunk.type === "AAC_SE" || chunk.type === "AVC_SE") {
+      this.#eventBus.emit("chunk", chunk);
       return;
     }
 
     if (chunk.type === "AAC_RAW") {
-      if (this.videoEncoderTrack?.buffer.length > 0) {
-        this.#processQueue();
-      } else {
-        this.audioEncoderTrack?.buffer.enqueue(chunk);
-      }
-    }
-  }
-
-  pushVideoChunk(chunk: TrackChunk) {
-    // 如果是单轨道
-    if (!this.audioEncoderTrack) {
-      this.eventBus.emit("chunk", chunk);
+      // 如果是音频包
+      this.#processAudioChunk(chunk);
       return;
     }
 
-    if (chunk.type === "AVC_SE") {
-      this.eventBus.emit("chunk", chunk);
-      return;
-    }
-
+    // 如果是视频包
     if (chunk.type === "AVC_NALU") {
-      if (this.audioEncoderTrack.buffer.length > 0) {
-        this.#processQueue();
-      } else {
-        this.videoEncoderTrack?.buffer.enqueue(chunk);
-      }
+      this.#processVideoChunk(chunk);
+      return;
     }
   }
 
   start() {
-    if (this.audioEncoderTrack) {
-      this.audioEncoderTrack.start();
+    if (this.#isProcessing) {
+      throw new Error("已经开始");
     }
-    if (this.videoEncoderTrack) {
-      this.videoEncoderTrack.start();
-    }
+
+    this.audioEncoderTrack?.start();
+    this.videoEncoderTrack?.start();
+
+    this.#isProcessing = true;
   }
 
   flush() {}
 
   close() {}
 
-  #processQueue() {
-    while (this.#hasBufferedData()) {
-      const audioTimestamp =
-        this.audioEncoderTrack?.buffer.peek()?.timestamp ?? Infinity;
-      const videoTimestamp =
-        this.videoEncoderTrack?.buffer.peek()?.timestamp ?? Infinity;
+  #processAudioChunk(chunk: TrackChunk) {
+    const track = this.audioEncoderTrack!;
 
-      if (audioTimestamp <= videoTimestamp) {
-        this.eventBus.emit("chunk", this.audioEncoderTrack?.buffer.dequeue());
-      } else {
-        this.eventBus.emit("chunk", this.videoEncoderTrack?.buffer.dequeue());
-      }
+    if (!this.#audioConfigReady || !this.#videoConfigReady) {
+      track.enqueue(chunk);
+      return;
+    }
+
+    while (!track.isEmpty() && track.peek()!.timestamp <= chunk.timestamp) {
+      this.#eventBus.emit("chunk", track.dequeue());
+    }
+
+    if (chunk.timestamp <= this.videoEncoderTrack!.lastTimestamp) {
+      this.#eventBus.emit("chunk", chunk);
+    } else {
+      track.enqueue(chunk);
     }
   }
 
-  #hasBufferedData(): boolean {
-    if (!this.audioEncoderTrack || !this.videoEncoderTrack) {
-      throw new Error("不存在音频或视频轨道");
+  #processVideoChunk(chunk: TrackChunk) {
+    const track = this.videoEncoderTrack!;
+
+    if (!this.#audioConfigReady || !this.#videoConfigReady) {
+      track.enqueue(chunk);
+      return;
     }
 
-    return (
-      this.audioEncoderTrack.buffer.length > 0 &&
-      this.videoEncoderTrack.buffer.length > 0
-    );
+    while (!track.isEmpty() && track.peek()!.timestamp <= chunk.timestamp) {
+      this.#eventBus.emit("chunk", track.dequeue());
+    }
+
+    if (chunk.timestamp <= this.audioEncoderTrack!.lastTimestamp) {
+      this.#eventBus.emit("chunk", chunk);
+    } else {
+      track.enqueue(chunk);
+    }
   }
 }
