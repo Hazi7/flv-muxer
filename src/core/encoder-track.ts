@@ -1,5 +1,5 @@
+import { EventBus } from "./event-bus";
 import { StreamProcessor, type TrackChunk } from "./stream-processor";
-import { RingBuffer } from "./ring-buffer";
 
 /**
  * 表示编码后的媒体数据块，可以是音频或视频数据块
@@ -9,9 +9,7 @@ type EncodedMediaChunk = EncodedAudioChunk | EncodedVideoChunk;
 /**
  * 表示编码后的媒体数据块的元数据，可以是音频或视频数据块的元数据
  */
-type EncodedMediaChunkMetadata =
-  | EncodedAudioChunkMetadata
-  | EncodedVideoChunkMetadata;
+type MediaDecoderConfig = AudioDecoderConfig | VideoDecoderConfig;
 
 /**
  * 单例类，用于管理轨道状态
@@ -40,7 +38,8 @@ class TrackState {
 export abstract class BaseEncoderTrack {
   readonly processor: MediaStreamTrackProcessor;
   readonly streamProcessor: StreamProcessor;
-  readonly buffer: RingBuffer<TrackChunk>;
+  readonly queue: TrackChunk[] = [];
+  readonly eventBus: EventBus;
 
   encoder!: VideoEncoder | AudioEncoder;
   state: TrackState;
@@ -52,8 +51,15 @@ export abstract class BaseEncoderTrack {
     return this._decoderConfig;
   }
 
-  set decoderConfig(config: VideoDecoderConfig) {
+  set decoderConfig(config: MediaDecoderConfig) {
+    if (this._decoderConfig) return;
     this._decoderConfig = config;
+
+    if (this instanceof VideoEncoderTrack) {
+      this.streamProcessor.setVideoConfigReady();
+    } else {
+      this.streamProcessor.setAudioConfigReady();
+    }
   }
 
   /**
@@ -67,7 +73,7 @@ export abstract class BaseEncoderTrack {
   ) {
     this.processor = new MediaStreamTrackProcessor({ track });
     this.streamProcessor = StreamProcessor.getInstance();
-    this.buffer = new RingBuffer(16);
+    this.eventBus = EventBus.getInstance();
 
     this.initEncoder(config);
 
@@ -81,7 +87,7 @@ export abstract class BaseEncoderTrack {
    */
   protected abstract handleOutput(
     chunk: EncodedMediaChunk,
-    metadata?: EncodedMediaChunkMetadata
+    metadata?: EncodedAudioChunkMetadata | EncodedVideoChunkMetadata
   ): void;
 
   /**
@@ -187,14 +193,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     try {
       // 添加视频元数据到缓冲区
       if (metadata?.decoderConfig?.description) {
-        this.streamProcessor.pushVideoChunk({
-          type: "AVC_SE",
-          data: new Uint8Array(
-            metadata?.decoderConfig?.description as ArrayBuffer
-          ),
-          timestamp: 0,
-          isKey: true,
-        });
+        this.decoderConfig = metadata.decoderConfig;
       }
 
       // 将 EncodedVideoChunk 转为 Uint8Array
@@ -203,7 +202,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
       // 添加视频数据到缓冲区
       const timestamp = this.calculateTimestamp(chunk.timestamp);
-      this.streamProcessor.pushVideoChunk({
+      this.streamProcessor.addChunk({
         type: "AVC_NALU",
         data,
         timestamp,
@@ -257,18 +256,11 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
    * @param chunk 编码后的音频数据块
    * @param metadata 编码后的音频数据块的元数据
    */
-  handleOutput(chunk: EncodedMediaChunk, metadata?: EncodedMediaChunkMetadata) {
+  handleOutput(chunk: EncodedMediaChunk, metadata?: EncodedAudioChunkMetadata) {
     try {
       // 如果是关键帧，则添加音频解码器配置
       if (metadata?.decoderConfig?.description) {
-        this.streamProcessor.pushAudioChunk({
-          type: "AAC_SE",
-          data: new Uint8Array(
-            metadata?.decoderConfig?.description as ArrayBuffer
-          ),
-          timestamp: 0,
-          isKey: true,
-        });
+        this.decoderConfig = metadata.decoderConfig;
       }
 
       // 将 EncodedAudioChunk 转为 Uint8Array
@@ -277,7 +269,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
 
       // 添加音频数据到缓冲区
       const timestamp = super.calculateTimestamp(chunk.timestamp); // 转换成相对时间戳
-      this.streamProcessor.pushAudioChunk({
+      this.streamProcessor.addChunk({
         type: "AAC_RAW",
         data,
         timestamp,

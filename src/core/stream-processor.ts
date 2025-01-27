@@ -18,6 +18,9 @@ export class StreamProcessor {
   #eventBus: EventBus;
   #audioEncoderTrack: AudioEncoderTrack | undefined;
   #videoEncoderTrack: VideoEncoderTrack | undefined;
+  #isProcessing: boolean = false;
+  #audioConfigReady: boolean = false;
+  #videoConfigReady: boolean = false;
 
   /**
    * 创建FlvStreamer的实例。
@@ -26,6 +29,14 @@ export class StreamProcessor {
    */
   private constructor() {
     this.#eventBus = EventBus.getInstance();
+  }
+
+  setAudioConfigReady() {
+    this.#audioConfigReady = true;
+  }
+
+  setVideoConfigReady() {
+    this.#videoConfigReady = true;
   }
 
   static getInstance() {
@@ -44,94 +55,86 @@ export class StreamProcessor {
     this.#videoEncoderTrack = track;
   }
 
-  pushAudioChunk(chunk: TrackChunk) {
-    if (!this.#videoEncoderTrack) {
+  addChunk(chunk: TrackChunk) {
+    if (!this.#audioEncoderTrack || !this.#videoEncoderTrack) {
       this.#eventBus.emit("chunk", chunk);
       return;
     }
 
-    if (chunk.type === "AAC_SE") {
-      this.#eventBus.emit("chunk", chunk);
-      return;
-    }
+    const audioQueue = this.#audioEncoderTrack?.queue;
+    const videoQueue = this.#videoEncoderTrack?.queue;
 
     if (chunk.type === "AAC_RAW") {
-      if (chunk.timestamp < this.#videoEncoderTrack.lastTimestamp) {
+      while (
+        videoQueue.length > 0 &&
+        videoQueue[0].timestamp <= chunk.timestamp
+      ) {
+        if (
+          audioQueue.length > 0 &&
+          audioQueue[0].timestamp < videoQueue[0].timestamp
+        ) {
+          const cacheChunk = audioQueue.shift();
+          if (cacheChunk) {
+            this.#eventBus.emit("chunk", chunk);
+          }
+        } else {
+          const cacheChunk = videoQueue.shift();
+          if (cacheChunk) {
+            this.#eventBus.emit("chunk", chunk);
+          }
+        }
+      }
+
+      if (chunk.timestamp <= this.#videoEncoderTrack.lastTimestamp) {
         this.#eventBus.emit("chunk", chunk);
-        return;
+      } else {
+        audioQueue.push(chunk);
       }
 
-      if (this.#hasBufferedData()) {
-        this.#processQueue();
-        return;
-      }
-
-      this.#audioEncoderTrack?.buffer.enqueue(chunk);
-    }
-  }
-
-  pushVideoChunk(chunk: TrackChunk) {
-    if (!this.#audioEncoderTrack) {
-      this.#eventBus.emit("chunk", chunk);
-      return;
-    }
-
-    if (chunk.type === "AVC_SE") {
-      this.#eventBus.emit("chunk", chunk);
       return;
     }
 
     if (chunk.type === "AVC_NALU") {
-      if (chunk.timestamp < this.#audioEncoderTrack.lastTimestamp) {
+      while (
+        audioQueue.length > 0 &&
+        audioQueue[0].timestamp < chunk.timestamp
+      ) {
+        if (
+          videoQueue.length > 0 &&
+          videoQueue[0].timestamp < audioQueue[0].timestamp
+        ) {
+          const cacheChunk = videoQueue.shift();
+          if (cacheChunk) {
+            this.#eventBus.emit("chunk", chunk);
+          }
+        } else {
+          const cacheChunk = audioQueue.shift();
+          if (cacheChunk) {
+            this.#eventBus.emit("chunk", chunk);
+          }
+        }
+      }
+
+      if (chunk.timestamp <= this.#audioEncoderTrack.lastTimestamp) {
         this.#eventBus.emit("chunk", chunk);
-        return;
+      } else {
+        videoQueue.push(chunk);
       }
-
-      if (this.#hasBufferedData()) {
-        this.#processQueue();
-        return;
-      }
-
-      this.#videoEncoderTrack?.buffer.enqueue(chunk);
     }
   }
 
   start() {
-    if (this.#audioEncoderTrack) {
-      this.#audioEncoderTrack.start();
+    if (this.#isProcessing) {
+      throw new Error("已经开始");
     }
-    if (this.#videoEncoderTrack) {
-      this.#videoEncoderTrack.start();
-    }
+
+    this.#audioEncoderTrack?.start();
+    this.#videoEncoderTrack?.start();
+
+    this.#isProcessing = true;
   }
 
   flush() {}
 
   close() {}
-
-  #processQueue() {
-    while (this.#hasBufferedData()) {
-      const audioTimestamp =
-        this.#audioEncoderTrack?.buffer.peek()?.timestamp ?? 0;
-      const videoTimestamp =
-        this.#videoEncoderTrack?.buffer.peek()?.timestamp ?? 0;
-
-      if (audioTimestamp <= videoTimestamp) {
-        this.#eventBus.emit("chunk", this.#audioEncoderTrack?.buffer.dequeue());
-      } else {
-        this.#eventBus.emit("chunk", this.#videoEncoderTrack?.buffer.dequeue());
-      }
-    }
-  }
-
-  #hasBufferedData(): boolean {
-    if (!this.#audioEncoderTrack || !this.#videoEncoderTrack) {
-      throw new Error("不存在音频或视频轨道");
-    }
-
-    return (
-      this.#audioEncoderTrack.buffer.length > 0 &&
-      this.#videoEncoderTrack.buffer.length > 0
-    );
-  }
 }
