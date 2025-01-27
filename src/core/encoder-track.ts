@@ -55,10 +55,22 @@ export abstract class BaseEncoderTrack {
     if (this._decoderConfig) return;
     this._decoderConfig = config;
 
-    if (this instanceof VideoEncoderTrack) {
-      this.streamProcessor.setVideoConfigReady();
-    } else {
+    if (this instanceof AudioEncoderTrack) {
+      this.streamProcessor.handleTrackChunk({
+        type: "AAC_SE",
+        data: new Uint8Array(config.description as ArrayBuffer),
+        timestamp: 0,
+        isKey: true,
+      });
       this.streamProcessor.setAudioConfigReady();
+    } else {
+      this.streamProcessor.handleTrackChunk({
+        type: "AVC_SE",
+        data: new Uint8Array(config.description as ArrayBuffer),
+        timestamp: 0,
+        isKey: true,
+      });
+      this.streamProcessor.setVideoConfigReady();
     }
   }
 
@@ -98,6 +110,22 @@ export abstract class BaseEncoderTrack {
     config: VideoEncoderConfig | AudioEncoderConfig
   ): void;
 
+  enqueue(chunk: TrackChunk): void {
+    this.queue.push(chunk);
+  }
+
+  dequeue(): TrackChunk | undefined {
+    return this.queue.shift();
+  }
+
+  peek(): TrackChunk | undefined {
+    return this.queue[0];
+  }
+
+  isEmpty(): boolean {
+    return this.queue.length === 0;
+  }
+
   /**
    * 启动编码轨道
    * @returns Promise<void>
@@ -125,7 +153,7 @@ export abstract class BaseEncoderTrack {
    * @param timestamp 时间戳
    * @returns 相对时间戳
    */
-  calculateTimestamp(timestamp: number) {
+  protected calculateTimestamp(timestamp: number) {
     if (!this.state.baseTimestamp) {
       this.state.baseTimestamp = timestamp;
     }
@@ -172,6 +200,8 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     await this.processor.readable.pipeTo(
       new WritableStream({
         write: (frame) => {
+          // TODO 对外暴露 VideoFrame，以用于美颜算法、抠像等...
+
           if (this.encoder.encodeQueueSize < 2) {
             this.frameCount++;
             this.encoder.encode(frame, {
@@ -189,7 +219,10 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
    * @param chunk 编码后的视频数据块
    * @param metadata 编码后的视频数据块的元数据
    */
-  handleOutput(chunk: EncodedVideoChunk, metadata?: EncodedVideoChunkMetadata) {
+  protected handleOutput(
+    chunk: EncodedVideoChunk,
+    metadata?: EncodedVideoChunkMetadata
+  ) {
     try {
       // 添加视频元数据到缓冲区
       if (metadata?.decoderConfig?.description) {
@@ -202,7 +235,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
       // 添加视频数据到缓冲区
       const timestamp = this.calculateTimestamp(chunk.timestamp);
-      this.streamProcessor.addChunk({
+      this.streamProcessor.handleTrackChunk({
         type: "AVC_NALU",
         data,
         timestamp,
@@ -256,7 +289,10 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
    * @param chunk 编码后的音频数据块
    * @param metadata 编码后的音频数据块的元数据
    */
-  handleOutput(chunk: EncodedMediaChunk, metadata?: EncodedAudioChunkMetadata) {
+  protected handleOutput(
+    chunk: EncodedMediaChunk,
+    metadata?: EncodedAudioChunkMetadata
+  ) {
     try {
       // 如果是关键帧，则添加音频解码器配置
       if (metadata?.decoderConfig?.description) {
@@ -269,7 +305,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
 
       // 添加音频数据到缓冲区
       const timestamp = super.calculateTimestamp(chunk.timestamp); // 转换成相对时间戳
-      this.streamProcessor.addChunk({
+      this.streamProcessor.handleTrackChunk({
         type: "AAC_RAW",
         data,
         timestamp,

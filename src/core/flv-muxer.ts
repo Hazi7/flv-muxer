@@ -156,7 +156,13 @@ export class FlvMuxer {
     try {
       this.#sourceStream = undefined;
       this.#outputStream = undefined;
+
+      this.#streamProcessor.flush();
     } catch (error) {}
+  }
+
+  async dispose() {
+    this.#streamProcessor.close();
   }
 
   /**

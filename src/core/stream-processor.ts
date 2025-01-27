@@ -16,8 +16,8 @@ export interface TrackChunk {
 export class StreamProcessor {
   static instance: StreamProcessor;
   #eventBus: EventBus;
-  #audioEncoderTrack: AudioEncoderTrack | undefined;
-  #videoEncoderTrack: VideoEncoderTrack | undefined;
+  audioEncoderTrack: AudioEncoderTrack | undefined;
+  videoEncoderTrack: VideoEncoderTrack | undefined;
   #isProcessing: boolean = false;
   #audioConfigReady: boolean = false;
   #videoConfigReady: boolean = false;
@@ -48,78 +48,36 @@ export class StreamProcessor {
   }
 
   addAudioTrack(track: AudioEncoderTrack) {
-    this.#audioEncoderTrack = track;
+    this.audioEncoderTrack = track;
   }
 
   addVideoTrack(track: VideoEncoderTrack) {
-    this.#videoEncoderTrack = track;
+    this.videoEncoderTrack = track;
   }
 
-  addChunk(chunk: TrackChunk) {
-    if (!this.#audioEncoderTrack || !this.#videoEncoderTrack) {
+  handleTrackChunk(chunk: TrackChunk) {
+    // 如果只有单个轨道，则发出该数据块
+    if (!this.audioEncoderTrack || !this.videoEncoderTrack) {
       this.#eventBus.emit("chunk", chunk);
       return;
     }
 
-    const audioQueue = this.#audioEncoderTrack?.queue;
-    const videoQueue = this.#videoEncoderTrack?.queue;
-
-    if (chunk.type === "AAC_RAW") {
-      while (
-        videoQueue.length > 0 &&
-        videoQueue[0].timestamp <= chunk.timestamp
-      ) {
-        if (
-          audioQueue.length > 0 &&
-          audioQueue[0].timestamp < videoQueue[0].timestamp
-        ) {
-          const cacheChunk = audioQueue.shift();
-          if (cacheChunk) {
-            this.#eventBus.emit("chunk", chunk);
-          }
-        } else {
-          const cacheChunk = videoQueue.shift();
-          if (cacheChunk) {
-            this.#eventBus.emit("chunk", chunk);
-          }
-        }
-      }
-
-      if (chunk.timestamp <= this.#videoEncoderTrack.lastTimestamp) {
-        this.#eventBus.emit("chunk", chunk);
-      } else {
-        audioQueue.push(chunk);
-      }
-
+    // 如果数据块是配置头（AAC_SE 或 AVC_SE），则发出该数据块
+    if (chunk.type === "AAC_SE" || chunk.type === "AVC_SE") {
+      this.#eventBus.emit("chunk", chunk);
       return;
     }
 
-    if (chunk.type === "AVC_NALU") {
-      while (
-        audioQueue.length > 0 &&
-        audioQueue[0].timestamp < chunk.timestamp
-      ) {
-        if (
-          videoQueue.length > 0 &&
-          videoQueue[0].timestamp < audioQueue[0].timestamp
-        ) {
-          const cacheChunk = videoQueue.shift();
-          if (cacheChunk) {
-            this.#eventBus.emit("chunk", chunk);
-          }
-        } else {
-          const cacheChunk = audioQueue.shift();
-          if (cacheChunk) {
-            this.#eventBus.emit("chunk", chunk);
-          }
-        }
-      }
+    if (chunk.type === "AAC_RAW") {
+      // 如果是音频包
+      this.#processAudioChunk(chunk);
+      return;
+    }
 
-      if (chunk.timestamp <= this.#audioEncoderTrack.lastTimestamp) {
-        this.#eventBus.emit("chunk", chunk);
-      } else {
-        videoQueue.push(chunk);
-      }
+    // 如果是视频包
+    if (chunk.type === "AVC_NALU") {
+      this.#processVideoChunk(chunk);
+      return;
     }
   }
 
@@ -128,8 +86,8 @@ export class StreamProcessor {
       throw new Error("已经开始");
     }
 
-    this.#audioEncoderTrack?.start();
-    this.#videoEncoderTrack?.start();
+    this.audioEncoderTrack?.start();
+    this.videoEncoderTrack?.start();
 
     this.#isProcessing = true;
   }
@@ -137,4 +95,42 @@ export class StreamProcessor {
   flush() {}
 
   close() {}
+
+  #processAudioChunk(chunk: TrackChunk) {
+    const track = this.audioEncoderTrack!;
+
+    if (!this.#audioConfigReady || !this.#videoConfigReady) {
+      track.enqueue(chunk);
+      return;
+    }
+
+    while (!track.isEmpty() && track.peek()!.timestamp <= chunk.timestamp) {
+      this.#eventBus.emit("chunk", track.dequeue());
+    }
+
+    if (chunk.timestamp <= this.videoEncoderTrack!.lastTimestamp) {
+      this.#eventBus.emit("chunk", chunk);
+    } else {
+      track.enqueue(chunk);
+    }
+  }
+
+  #processVideoChunk(chunk: TrackChunk) {
+    const track = this.videoEncoderTrack!;
+
+    if (!this.#audioConfigReady || !this.#videoConfigReady) {
+      track.enqueue(chunk);
+      return;
+    }
+
+    while (!track.isEmpty() && track.peek()!.timestamp <= chunk.timestamp) {
+      this.#eventBus.emit("chunk", track.dequeue());
+    }
+
+    if (chunk.timestamp <= this.audioEncoderTrack!.lastTimestamp) {
+      this.#eventBus.emit("chunk", chunk);
+    } else {
+      track.enqueue(chunk);
+    }
+  }
 }
