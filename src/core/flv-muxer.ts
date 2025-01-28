@@ -53,9 +53,9 @@ export class FlvMuxer {
    * 初始化多路复用策略
    */
   #initStrategies() {
-    this.#strategies["AAC_RAW"] = new AACRawStrategy();
     this.#strategies["AAC_SE"] = new AACSEStrategy();
     this.#strategies["AVC_SE"] = new AVCSEStrategy();
+    this.#strategies["AAC_RAW"] = new AACRawStrategy();
     this.#strategies["AVC_NALU"] = new AVCNALUStrategy();
   }
 
@@ -94,6 +94,7 @@ export class FlvMuxer {
         controller.enqueue(tag);
       },
       flush: (controller) => {
+        console.log(controller);
         // TODO 释放资源
       },
     });
@@ -157,13 +158,13 @@ export class FlvMuxer {
       this.#sourceStream = undefined;
       this.#outputStream = undefined;
 
-      this.#streamProcessor.flush();
+      this.#streamProcessor.stop();
     } catch (error) {
       console.error(error);
     }
   }
 
-  async dispose() {
+  async close() {
     this.#streamProcessor.close();
   }
 
@@ -172,7 +173,7 @@ export class FlvMuxer {
    */
   #encodeMetadata() {
     try {
-      const metadata: Record<string, any> = {
+      const metadata: Record<string, unknown> = {
         duration: 0,
         encoder: "flv-muxer.js",
       };

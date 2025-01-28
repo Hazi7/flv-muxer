@@ -1,5 +1,5 @@
 import { EventBus } from "./event-bus";
-import { StreamProcessor, type TrackChunk } from "./stream-processor";
+import { type TrackChunk } from "./stream-processor";
 
 /**
  * 表示编码后的媒体数据块，可以是音频或视频数据块
@@ -254,6 +254,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     this.lastFrame = frame;
 
     this.timer = setTimeout(() => {
+      console.log(9889);
       if (frame) {
         const videoFrame = new VideoFrame(frame, {
           duration: 1e6,

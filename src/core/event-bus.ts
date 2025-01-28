@@ -1,4 +1,4 @@
-type EventHandler = (...args: any[]) => void;
+type EventHandler = (...args: unknown[]) => void;
 
 export class EventBus {
   static #instance: EventBus;
@@ -41,7 +41,7 @@ export class EventBus {
 
   // 一次性订阅
   once(eventName: string, handler: EventHandler): void {
-    const onceHandler = (...args: any[]) => {
+    const onceHandler = (...args: unknown[]) => {
       handler(...args);
       this.off(eventName, onceHandler);
     };
@@ -49,7 +49,7 @@ export class EventBus {
   }
 
   // 触发事件
-  emit(eventName: string, ...args: any[]): void {
+  emit(eventName: string, ...args: unknown[]): void {
     if (!this.#events.has(eventName)) return;
 
     const handlers = this.#events.get(eventName)!;

@@ -35,7 +35,7 @@ export class StreamProcessor {
 
   #initListener() {
     this.#eventBus.on("TRACK_CHUNK", (chunk) => {
-      this.handleTrackChunk(chunk);
+      this.handleTrackChunk(chunk as TrackChunk);
     });
   }
 
@@ -112,9 +112,21 @@ export class StreamProcessor {
     this.#isProcessing = true;
   }
 
-  flush() {}
+  stop() {
+    if (!this.#isProcessing) {
+      throw new Error("还没有开始");
+    }
 
-  close() {}
+    this.audioEncoderTrack?.stop();
+    this.videoEncoderTrack?.stop();
+
+    this.#isProcessing = false;
+  }
+
+  close() {
+    this.audioEncoderTrack?.close();
+    this.videoEncoderTrack?.close();
+  }
 
   #processAudioChunk(chunk: TrackChunk) {
     const audioTrack = this.audioEncoderTrack!;

@@ -127,7 +127,7 @@ export class FlvEncoder extends ScriptEncoder {
    * @param {Record<string, any>} metadata - 要包含在脚本数据标签中的元数据。
    * @returns {Uint8Array} - 作为 Uint8Array 的脚本数据标签。
    */
-  encodeScriptDataTag(metadata: Record<string, any>): Uint8Array {
+  encodeScriptDataTag(metadata: Record<string, unknown>): Uint8Array {
     this.writer.reset();
 
     this.writeScriptDataValue("onMetaData");

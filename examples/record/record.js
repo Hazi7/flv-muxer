@@ -1,5 +1,5 @@
 async function getDisplayMedia() {
-  return navigator.mediaDevices.getUserMedia({
+  return navigator.mediaDevices.getDisplayMedia({
     video: {
       frameRate: {
         ideal: 30,
@@ -13,13 +13,15 @@ async function getDisplayMedia() {
 
 let recordingChunks = [];
 
-// const ws = new WebSocket("ws://localhost:3000/livestream/push");
+const ws = new WebSocket("ws://localhost:3000/livestream/push");
 const writable = new WritableStream({
   write: (chunk) => {
     recordingChunks.push(chunk);
-    // ws.send(chunk);
+    ws.send(chunk);
   },
 });
+
+let flvMuxer;
 
 async function startRecording() {
   const stream = await getDisplayMedia();
@@ -27,7 +29,7 @@ async function startRecording() {
   const videoTrack = stream.getVideoTracks()[0];
   const audioTrack = stream.getAudioTracks()[0];
 
-  const flvMuxer = new FlvMuxer(writable);
+  flvMuxer = new FlvMuxer(writable);
 
   await flvMuxer.configure({
     video: {
@@ -53,6 +55,7 @@ async function startRecording() {
 }
 
 async function stopRecording() {
+  await flvMuxer.stop();
   try {
     // Save the file
     const fileHandle = await window.showSaveFilePicker({

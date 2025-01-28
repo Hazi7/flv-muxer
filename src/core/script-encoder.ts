@@ -21,7 +21,7 @@ export class ScriptEncoder {
    * 将 ECMA 数组以 AMF 格式写入二进制流。
    * @param obj - 表示 ECMA 数组的对象。
    */
-  writeScriptDataEcmaArray(obj: Record<string, any>) {
+  writeScriptDataEcmaArray(obj: Record<string, unknown>) {
     this.writer.writeUint32(Object.keys(obj).length); // 数组长度
 
     for (const [key, value] of Object.entries(obj)) {
@@ -45,7 +45,7 @@ export class ScriptEncoder {
    * 将对象以 AMF 格式写入二进制流。
    * @param objs - 要写入的对象。
    */
-  writeScriptDataObject(objs: Record<string, any>) {
+  writeScriptDataObject(objs: Record<string, unknown>) {
     for (const [key, value] of Object.entries(objs)) {
       this.writeScriptDataObjectProperty(key, value);
     }
@@ -67,7 +67,7 @@ export class ScriptEncoder {
    * @param key - 属性的键。
    * @param value - 属性的值。
    */
-  writeScriptDataObjectProperty(key: string, value: any) {
+  writeScriptDataObjectProperty(key: string, value: unknown) {
     this.writeScriptDataString(key);
     this.writeScriptDataValue(value);
   }
@@ -76,7 +76,7 @@ export class ScriptEncoder {
    * 将严格数组以 AMF 格式写入二进制流。
    * @param arr - 要写入的数组。
    */
-  writeScriptDataStrictArray(arr: any[]) {
+  writeScriptDataStrictArray(arr: unknown[]) {
     this.writer.writeUint32(arr.length);
     for (const value of arr) {
       this.writeScriptDataValue(value);
@@ -99,7 +99,7 @@ export class ScriptEncoder {
    * 将值以 AMF 格式写入二进制流。
    * @param value - 要写入的值。
    */
-  writeScriptDataValue(value: any) {
+  writeScriptDataValue(value: unknown) {
     if (value === null) {
       this.writer.writeUint8(AmfType.NULL);
     } else if (value === undefined) {
@@ -126,7 +126,7 @@ export class ScriptEncoder {
       this.writeScriptDataStrictArray(value);
     } else if (typeof value === "object") {
       this.writer.writeUint8(AmfType.ECMA_ARRAY);
-      this.writeScriptDataEcmaArray(value);
+      this.writeScriptDataEcmaArray(value as Record<string, unknown>);
     }
   }
 }
