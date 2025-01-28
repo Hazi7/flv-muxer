@@ -29,6 +29,14 @@ export class StreamProcessor {
    */
   private constructor() {
     this.#eventBus = EventBus.getInstance();
+
+    this.#initListener();
+  }
+
+  #initListener() {
+    this.#eventBus.on("TRACK_CHUNK", (chunk) => {
+      this.handleTrackChunk(chunk);
+    });
   }
 
   setAudioConfigReady() {
@@ -62,8 +70,20 @@ export class StreamProcessor {
       return;
     }
 
-    // 如果数据块是配置头（AAC_SE 或 AVC_SE），则发出该数据块
-    if (chunk.type === "AAC_SE" || chunk.type === "AVC_SE") {
+    if (chunk.type === "AAC_SE") {
+      if (!this.#audioConfigReady) {
+        this.setAudioConfigReady();
+      }
+
+      this.#eventBus.emit("chunk", chunk);
+      return;
+    }
+
+    if (chunk.type === "AVC_SE") {
+      if (!this.#videoConfigReady) {
+        this.setVideoConfigReady();
+      }
+
       this.#eventBus.emit("chunk", chunk);
       return;
     }
