@@ -24,11 +24,11 @@ class TrackState {
    * @returns TrackState 的单例实例
    */
   static getInstance() {
-    if (!TrackState.#instance) {
-      TrackState.#instance = new TrackState();
+    if (!this.#instance) {
+      this.#instance = new this();
     }
 
-    return TrackState.#instance;
+    return this.#instance;
   }
 }
 
@@ -37,7 +37,6 @@ class TrackState {
  */
 export abstract class BaseEncoderTrack {
   readonly processor: MediaStreamTrackProcessor;
-  readonly streamProcessor: StreamProcessor;
   readonly queue: TrackChunk[] = [];
   readonly eventBus: EventBus;
 
@@ -56,21 +55,19 @@ export abstract class BaseEncoderTrack {
     this._decoderConfig = config;
 
     if (this instanceof AudioEncoderTrack) {
-      this.streamProcessor.handleTrackChunk({
+      this.eventBus.emit("TRACK_CHUNK", {
         type: "AAC_SE",
         data: new Uint8Array(config.description as ArrayBuffer),
         timestamp: 0,
         isKey: true,
       });
-      this.streamProcessor.setAudioConfigReady();
     } else {
-      this.streamProcessor.handleTrackChunk({
+      this.eventBus.emit("TRACK_CHUNK", {
         type: "AVC_SE",
         data: new Uint8Array(config.description as ArrayBuffer),
         timestamp: 0,
         isKey: true,
       });
-      this.streamProcessor.setVideoConfigReady();
     }
   }
 
@@ -84,7 +81,6 @@ export abstract class BaseEncoderTrack {
     config: VideoEncoderConfig | AudioEncoderConfig
   ) {
     this.processor = new MediaStreamTrackProcessor({ track });
-    this.streamProcessor = StreamProcessor.getInstance();
     this.eventBus = EventBus.getInstance();
 
     this.initEncoder(config);
@@ -239,7 +235,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
       // 添加视频数据到缓冲区
       const timestamp = this.calculateTimestamp(chunk.timestamp);
-      this.streamProcessor.handleTrackChunk({
+      this.eventBus.emit("TRACK_CHUNK", {
         type: "AVC_NALU",
         data,
         timestamp,
@@ -328,8 +324,8 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
       chunk.copyTo(data);
 
       // 添加音频数据到缓冲区
-      const timestamp = super.calculateTimestamp(chunk.timestamp); // 转换成相对时间戳
-      this.streamProcessor.handleTrackChunk({
+      const timestamp = super.calculateTimestamp(chunk.timestamp); // 转换成相对时间
+      this.eventBus.emit("TRACK_CHUNK", {
         type: "AAC_RAW",
         data,
         timestamp,

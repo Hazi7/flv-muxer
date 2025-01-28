@@ -23,9 +23,6 @@ importers:
       '@rollup/plugin-typescript':
         specifier: ^12.1.2
         version: 12.1.2(rollup@4.29.1)(tslib@2.8.1)(typescript@5.7.2)
-      '@types/node':
-        specifier: ^22.10.5
-        version: 22.10.5
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.8(vitest@2.1.8)
@@ -1658,6 +1655,7 @@ snapshots:
   '@types/node@22.10.5':
     dependencies:
       undici-types: 6.20.0
+    optional: true
 
   '@types/resolve@1.20.2': {}
 
@@ -2455,7 +2453,8 @@ snapshots:
 
   typescript@5.7.2: {}
 
-  undici-types@6.20.0: {}
+  undici-types@6.20.0:
+    optional: true
 
   uri-js@4.4.1:
     dependencies:

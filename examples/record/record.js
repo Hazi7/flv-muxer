@@ -1,5 +1,5 @@
 async function getDisplayMedia() {
-  return navigator.mediaDevices.getDisplayMedia({
+  return navigator.mediaDevices.getUserMedia({
     video: {
       frameRate: {
         ideal: 30,
@@ -13,7 +13,7 @@ async function getDisplayMedia() {
 
 let recordingChunks = [];
 
-// const ws = new WebSocket("ws://49.232.183.67:9998/live/first");
+// const ws = new WebSocket("ws://localhost:3000/livestream/push");
 const writable = new WritableStream({
   write: (chunk) => {
     recordingChunks.push(chunk);
