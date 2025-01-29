@@ -200,6 +200,13 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
         write: (frame) => {
           // TODO 对外暴露 VideoFrame，以用于美颜算法、抠像等...
 
+          // 浏览器的静态帧策略是为录制设计的，直播时需要直接 close 掉所有静态帧，自己手动实现静态帧策略
+          console.log(frame);
+          if (frame.duration === 1e6) {
+            frame.close();
+            return;
+          }
+
           this.#scheduleFrameProcessing(frame.clone());
 
           if (this.encoder.encodeQueueSize < 2) {
@@ -254,18 +261,18 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     this.lastFrame = frame;
 
     this.timer = setTimeout(() => {
-      console.log(9889);
       if (frame) {
+        if (!this.lastFrame) return;
         const videoFrame = new VideoFrame(frame, {
           duration: 1e6,
-          timestamp: frame.timestamp + 1e6,
+          timestamp: this.lastFrame.timestamp + 1e6,
         });
 
         this.encoder.encode(videoFrame as VideoFrame & AudioData);
 
         this.#scheduleFrameProcessing(videoFrame);
       }
-    }, 1e3) as unknown as number;
+    }, 200);
   }
 }
 

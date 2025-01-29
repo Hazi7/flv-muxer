@@ -25,7 +25,7 @@ export enum FrameType {
   /**
    * 视频信息/命令帧 (Video Info/Command Frame)：携带视频流的元数据信息。
    */
-  VideoInfo = 0x05,
+    VideoInfo = 0x05,
 }
 
 /**

@@ -30,10 +30,10 @@ export class StreamProcessor {
   private constructor() {
     this.#eventBus = EventBus.getInstance();
 
-    this.#initListener();
+    this.#initListeners();
   }
 
-  #initListener() {
+  #initListeners() {
     this.#eventBus.on("TRACK_CHUNK", (chunk) => {
       this.handleTrackChunk(chunk as TrackChunk);
     });
@@ -66,7 +66,7 @@ export class StreamProcessor {
   handleTrackChunk(chunk: TrackChunk) {
     // 如果只有单个轨道，则发出该数据块
     if (!this.audioEncoderTrack || !this.videoEncoderTrack) {
-      this.#eventBus.emit("chunk", chunk);
+      this.#publishChunk(chunk);
       return;
     }
 
@@ -75,7 +75,7 @@ export class StreamProcessor {
         this.setAudioConfigReady();
       }
 
-      this.#eventBus.emit("chunk", chunk);
+      this.#publishChunk(chunk);
       return;
     }
 
@@ -84,7 +84,7 @@ export class StreamProcessor {
         this.setVideoConfigReady();
       }
 
-      this.#eventBus.emit("chunk", chunk);
+      this.#publishChunk(chunk);
       return;
     }
 
@@ -141,11 +141,11 @@ export class StreamProcessor {
       !videoTrack.isEmpty() &&
       videoTrack.peek()!.timestamp <= chunk.timestamp
     ) {
-      this.#eventBus.emit("chunk", videoTrack.dequeue());
+      this.#publishChunk(videoTrack.dequeue());
     }
 
     if (chunk.timestamp <= videoTrack.lastTimestamp) {
-      this.#eventBus.emit("chunk", chunk);
+      this.#publishChunk(chunk);
     } else {
       audioTrack.enqueue(chunk);
     }
@@ -164,13 +164,18 @@ export class StreamProcessor {
       !audioTrack.isEmpty() &&
       audioTrack.peek()!.timestamp <= chunk.timestamp
     ) {
-      this.#eventBus.emit("chunk", audioTrack.dequeue());
+      this.#publishChunk(audioTrack.dequeue());
     }
 
     if (chunk.timestamp <= audioTrack.lastTimestamp) {
-      this.#eventBus.emit("chunk", chunk);
+      this.#publishChunk(chunk);
     } else {
       videoTrack.enqueue(chunk);
     }
+  }
+
+  #publishChunk(chunk: TrackChunk | undefined) {
+    if (!chunk) return;
+    this.#eventBus.emit("CHUNK_PUBLISH", chunk);
   }
 }

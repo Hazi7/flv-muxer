@@ -20,6 +20,7 @@ export interface MuxerOptions {
     config: AudioEncoderConfig;
   };
 }
+export type MuxerState = "inactive" | "recording" | "paused" | "stopped";
 
 /**
  * FLV 多路复用器类
@@ -65,7 +66,7 @@ export class FlvMuxer {
   #initSourceStream() {
     this.#sourceStream = new ReadableStream({
       start: (controller) => {
-        this.#eventBus.on("chunk", (chunk) => {
+        this.#eventBus.on("CHUNK_PUBLISH", (chunk) => {
           controller.enqueue(chunk);
         });
       },
@@ -94,16 +95,40 @@ export class FlvMuxer {
         controller.enqueue(tag);
       },
       flush: (controller) => {
-        console.log(controller);
         // TODO 释放资源
+        console.log(controller);
       },
     });
   }
 
   /**
+   * 配置多路复用器选项
+   * @param options - 多路复用器选项
+   */
+  configure(options: MuxerOptions) {
+    this.#options = options;
+
+    const { track: audioTrack, config: audioConfig } = options.audio;
+
+    if (audioTrack && audioConfig) {
+      this.#streamProcessor.addAudioTrack(
+        new AudioEncoderTrack(audioTrack, audioConfig)
+      );
+    }
+
+    const { track: videoTrack, config: videoConfig } = options.video;
+
+    if (videoTrack && videoConfig) {
+      this.#streamProcessor.addVideoTrack(
+        new VideoEncoderTrack(videoTrack, videoConfig)
+      );
+    }
+  }
+
+  /**
    * 启动多路复用器
    */
-  async start() {
+  start() {
     if (!this.#options) {
       throw new Error("Muxer not configured. Call configure() first.");
     }
@@ -126,34 +151,14 @@ export class FlvMuxer {
     this.#streamProcessor.start();
   }
 
-  /**
-   * 配置多路复用器选项
-   * @param options - 多路复用器选项
-   */
-  async configure(options: MuxerOptions) {
-    this.#options = options;
+  pause() {}
 
-    const { track: audioTrack, config: audioConfig } = options.audio;
-
-    if (audioTrack && audioConfig) {
-      this.#streamProcessor.addAudioTrack(
-        new AudioEncoderTrack(audioTrack, audioConfig)
-      );
-    }
-
-    const { track: videoTrack, config: videoConfig } = options.video;
-
-    if (videoTrack && videoConfig) {
-      this.#streamProcessor.addVideoTrack(
-        new VideoEncoderTrack(videoTrack, videoConfig)
-      );
-    }
-  }
+  resume() {}
 
   /**
    * 停止多路复用器
    */
-  async stop() {
+  stop() {
     try {
       this.#sourceStream = undefined;
       this.#outputStream = undefined;
@@ -162,10 +167,6 @@ export class FlvMuxer {
     } catch (error) {
       console.error(error);
     }
-  }
-
-  async close() {
-    this.#streamProcessor.close();
   }
 
   /**
