@@ -135,11 +135,12 @@ export class FlvEncoder extends ScriptEncoder {
 
     // 创建 ScriptTag
     const scriptTag = this.encodeFlvTag(
-      "ScriptData",
+      "SCRIPT",
       new Uint8Array(0),
       0,
       this.writer.getBytes()
     );
+
     return scriptTag;
   }
 
@@ -173,7 +174,7 @@ export class FlvEncoder extends ScriptEncoder {
         firstByte,
         AACPacketType[params.aacPacketType],
       ]);
-      return this.encodeFlvTag("Audio", header, timestamp, audioData);
+      return this.encodeFlvTag("AUDIO", header, timestamp, audioData);
     }
   }
 
@@ -205,6 +206,6 @@ export class FlvEncoder extends ScriptEncoder {
     header[3] = (compositionTime >> 8) & 0xff;
     header[4] = compositionTime & 0xff;
 
-    return this.encodeFlvTag("Video", header, timestamp, videoBody);
+    return this.encodeFlvTag("VIDEO", header, timestamp, videoBody);
   }
 }

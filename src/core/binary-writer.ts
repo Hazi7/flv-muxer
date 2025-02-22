@@ -12,24 +12,9 @@ const MIN_GROWTH = 512;
  * 二进制写入器类，用于将各种数据类型写入二进制缓冲区
  */
 export class BinaryWriter {
-  /**
-   * 当前写入位置
-   */
   #position: number = 0;
-
-  /**
-   * 用于存储数据的二进制数组
-   */
   #buffer: Uint8Array;
-
-  /**
-   * 用于操作二进制数组的 DataView
-   */
   #view: DataView;
-
-  /**
-   * 是否使用小端字节序
-   */
   #littleEndian: boolean;
 
   /**
@@ -57,6 +42,7 @@ export class BinaryWriter {
    */
   writeUint16(value: number) {
     this.ensureAvailable(2);
+
     this.#view.setUint16(this.#position, value, this.#littleEndian);
     this.#position += 2;
   }

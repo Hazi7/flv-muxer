@@ -1,5 +1,5 @@
 export enum TagType {
-  Audio = 0x08,
-  Video = 0x09,
-  ScriptData = 0x12,
+  AUDIO = 0x08,
+  VIDEO = 0x09,
+  SCRIPT = 0x12,
 }

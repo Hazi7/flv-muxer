@@ -11,6 +11,7 @@ import { FlvEncoder } from "./flv-encoder";
 import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
 export interface MuxerOptions {
+  model: "live" | "record";
   video: {
     track: MediaStreamTrack;
     config: VideoEncoderConfig;

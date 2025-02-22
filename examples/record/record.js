@@ -5,16 +5,19 @@ async function getDisplayMedia() {
         ideal: 30,
       },
     },
-    audio: true,
+    audio: {
+      numberOfChannels: 2,
+      sampleRate: 44100,
+    },
   });
 }
 
 let recordingChunks = [];
 
-const ws = new WebSocket("ws://localhost:3000/livestream/push");
+const ws = new WebSocket("ws://localhost:9001/livestream/test");
 const writable = new WritableStream({
   write: (chunk) => {
-    // recordingChunks.push(chunk); 
+    // recordingChunks.push(chunk);
     ws.send(chunk);
   },
 });
@@ -34,16 +37,18 @@ async function startRecording() {
       track: videoTrack,
       config: {
         codec: "avc1.640034",
-        width: 1920,
-        height: 1080,
+        width: 2560,
+        height: 1440,
+        framerate: 30,
+        latencyMode: "realtime",
       },
     },
     audio: {
       track: audioTrack,
       config: {
-        codec: "mp4a.40.5",
-        sampleRate: 48000,
-        numberOfChannels: 1,
+        codec: "mp4a.40.29",
+        sampleRate: 44100,
+        numberOfChannels: 2,
         bitrate: 128000,
       },
     },

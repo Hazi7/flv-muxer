@@ -114,7 +114,9 @@ export class StreamProcessor {
 
   stop() {
     if (!this.#isProcessing) {
-      throw new Error("还没有开始");
+      throw new Error(
+        "StreamProcessor is not currently processing. Please call the 'start' method before proceeding."
+      );
     }
 
     this.audioEncoderTrack?.stop();

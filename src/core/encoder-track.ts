@@ -18,6 +18,7 @@ class TrackState {
   static #instance: TrackState;
 
   baseTimestamp: number = 0;
+  isStill: boolean = false;
 
   /**
    * 获取 TrackState 的单例实例
@@ -106,6 +107,12 @@ export abstract class BaseEncoderTrack {
     config: VideoEncoderConfig | AudioEncoderConfig
   ): void;
 
+  /**
+   * 启动编码轨道
+   * @returns Promise<void>
+   */
+  protected abstract start(): Promise<void>;
+
   enqueue(chunk: TrackChunk): void {
     this.queue.push(chunk);
   }
@@ -121,12 +128,6 @@ export abstract class BaseEncoderTrack {
   isEmpty(): boolean {
     return this.queue.length === 0;
   }
-
-  /**
-   * 启动编码轨道
-   * @returns Promise<void>
-   */
-  abstract start(): Promise<void>;
 
   /**
    * 停止编码轨道
@@ -199,12 +200,15 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
       new WritableStream({
         write: (frame) => {
           // TODO 对外暴露 VideoFrame，以用于美颜算法、抠像等...
-
           // 浏览器的静态帧策略是为录制设计的，直播时需要直接 close 掉所有静态帧，自己手动实现静态帧策略
-          console.log(frame);
-          if (frame.duration === 1e6) {
-            frame.close();
-            return;
+
+          if (this.state.isStill) {
+            this.state.isStill = false;
+
+            if (frame.timestamp <= this.lastTimestamp) {
+              frame.close();
+              return;
+            }
           }
 
           this.#scheduleFrameProcessing(frame.clone());
@@ -262,17 +266,22 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
     this.timer = setTimeout(() => {
       if (frame) {
+        this.state.isStill = true;
         if (!this.lastFrame) return;
         const videoFrame = new VideoFrame(frame, {
-          duration: 1e6,
-          timestamp: this.lastFrame.timestamp + 1e6,
+          duration: 100000,
+          timestamp: this.lastFrame.timestamp + 100000,
         });
 
-        this.encoder.encode(videoFrame as VideoFrame & AudioData);
+        console.log(videoFrame);
+
+        this.encoder.encode(videoFrame as VideoFrame & AudioData, {
+          keyFrame: true,
+        });
 
         this.#scheduleFrameProcessing(videoFrame);
       }
-    }, 200);
+    }, 100);
   }
 }
 
