@@ -103,7 +103,7 @@ export class StreamProcessor {
 
   start() {
     if (this.#isProcessing) {
-      throw new Error("");
+      throw new Error("Stream processor is already processing");
     }
 
     this.audioEncoderTrack?.start();
