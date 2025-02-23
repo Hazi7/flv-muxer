@@ -177,6 +177,10 @@ export class FlvMuxer {
    * 恢复多路复用器
    */
   async resume() {
+    if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
+      throw new Error("Muxer is not running.");
+    }
+
     this.#eventBus.emit("RESUME_MUXER");
   }
 
