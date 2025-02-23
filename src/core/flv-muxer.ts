@@ -22,9 +22,8 @@ export interface MuxerOptions {
     config: AudioEncoderConfig;
   };
   chunked: boolean;
-  debug: boolean;
 }
-export type MuxerState = "inactive" | "recording" | "paused" | "stopped";
+export type MuxerState = "recording" | "paused" | "stopped";
 
 /**
  * FLV 多路复用器类
@@ -36,6 +35,7 @@ export class FlvMuxer {
 
   #options: MuxerOptions | undefined;
   #sourceStream: ReadableStream | undefined;
+  #sourceStreamController: ReadableStreamDefaultController | undefined;
   #muxStream: TransformStream | undefined;
   #outputStream: WritableStream | undefined;
   #strategies: { [key: string]: MuxStrategy } = {};
@@ -76,19 +76,12 @@ export class FlvMuxer {
   #initSourceStream() {
     this.#sourceStream = new ReadableStream({
       start: (controller) => {
+        this.#sourceStreamController = controller;
         this.#readableHandler = (chunk: Uint8Array) => {
           controller.enqueue(chunk);
         };
 
         this.#eventBus.on("CHUNK_PUBLISH", this.#readableHandler);
-      },
-      cancel: () => {
-        if (this.#readableHandler) {
-          this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
-        }
-
-        this.#readableHandler = undefined;
-        this.#sourceStream = undefined;
       },
     });
   }
@@ -144,7 +137,7 @@ export class FlvMuxer {
   /**
    * 启动多路复用器
    */
-  start() {
+  async start() {
     if (!this.#options) {
       throw new Error("Muxer not configured. Call configure() first.");
     }
@@ -154,40 +147,65 @@ export class FlvMuxer {
         throw new Error("Failed to initialize streams");
       }
 
-      this.#sourceStream
-        .pipeThrough(this.#muxStream)
-        .pipeTo(this.#outputStream);
+      this.#eventBus.emit("START_MUXER");
 
       this.#streamProcessor.start();
+
+      this.#sourceStream
+        .pipeThrough(this.#muxStream)
+        .pipeTo(this.#outputStream)
+        .then(() => {
+          this.#sourceStream?.cancel();
+        })
+        .catch((error) => {
+          console.error("Error during stream processing:", error);
+        });
     } catch (error) {
       throw new Error(`Error starting Muxer: ${error}`);
     }
   }
 
-  pause() {
+  async pause() {
     if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
       throw new Error("Muxer is not running.");
     }
 
-    // 暂停流处理
-    this.#streamProcessor.stop();
+    this.#eventBus.emit("PAUSE_MUXER");
   }
 
   /**
    * 恢复多路复用器
    */
-  resume() {
-    this.#streamProcessor.start();
+  async resume() {
+    this.#eventBus.emit("RESUME_MUXER");
   }
 
   /**
    * 停止多路复用器
    */
-  stop() {
+  async stop() {
     try {
-      // 关闭
-      this.#sourceStream?.cancel();
+      this.#eventBus.emit("STOP_MUXER");
       this.#streamProcessor.close();
+      this.#sourceStreamController?.close();
+
+      const videoTrack = this.#options?.video.track;
+      const audioTrack = this.#options?.audio.track;
+
+      if (videoTrack) {
+        videoTrack.stop();
+      }
+
+      if (audioTrack) {
+        audioTrack.stop();
+      }
+
+      if (this.#readableHandler) {
+        this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
+      }
+
+      this.#readableHandler = undefined;
+      this.#sourceStream = undefined;
     } catch (error) {
       Logger.error(`Error stopping Muxer: ${error}`);
     }

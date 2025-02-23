@@ -1,5 +1,6 @@
 import { Logger } from "../utils/logger";
 import { EventBus } from "./event-bus";
+import type { MuxerState } from "./flv-muxer";
 import { type TrackChunk } from "./stream-processor";
 
 /**
@@ -38,15 +39,17 @@ class TrackState {
  * 抽象基类，用于处理编码轨道
  */
 export abstract class BaseEncoderTrack {
-  readonly trackProcessor: MediaStreamTrackProcessor;
+  readonly processor: MediaStreamTrackProcessor;
   readonly queue: TrackChunk[] = [];
   readonly eventBus: EventBus;
 
   transform: TransformStream | undefined;
   writable: WritableStream | undefined;
+  writableController: WritableStreamDefaultController | undefined;
   encoder!: VideoEncoder | AudioEncoder;
   state: TrackState;
   lastTimestamp: number = 0;
+  muxerState: MuxerState;
 
   private _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
 
@@ -85,13 +88,30 @@ export abstract class BaseEncoderTrack {
     config: VideoEncoderConfig | AudioEncoderConfig,
     transform?: TransformStream
   ) {
-    this.trackProcessor = new MediaStreamTrackProcessor({ track });
+    this.processor = new MediaStreamTrackProcessor({ track });
     this.eventBus = EventBus.getInstance();
     this.transform = transform;
 
     this.initEncoder(config);
+    this.initWritable();
 
     this.state = TrackState.getInstance();
+
+    this.eventBus.on("START_MUXER", () => {
+      this.muxerState = "recording";
+    });
+
+    this.eventBus.on("STOP_MUXER", () => {
+      this.muxerState = "stopped";
+    });
+
+    this.eventBus.on("RESUME_MUXER", () => {
+      this.muxerState = "recording";
+    });
+
+    this.eventBus.on("PAUSE_MUXER", () => {
+      this.muxerState = "paused";
+    });
   }
 
   /**
@@ -137,11 +157,17 @@ export abstract class BaseEncoderTrack {
   async start(): Promise<void> {
     if (this.writable) {
       if (this.transform) {
-        await this.trackProcessor.readable
+        await this.processor.readable
           .pipeThrough(this.transform)
-          .pipeTo(this.writable);
+          .pipeTo(this.writable)
+          .then(() => {
+            this.processor.readable.cancel();
+          })
+          .catch((error) => {
+            console.error("pipeTo error:", error);
+          });
       } else {
-        await this.trackProcessor.readable.pipeTo(this.writable);
+        await this.processor.readable.pipeTo(this.writable);
       }
     }
   }
@@ -159,13 +185,7 @@ export abstract class BaseEncoderTrack {
    * @returns Promise<void>
    */
   async close(): Promise<void> {
-    await this.trackProcessor.readable.cancel();
-    await this.writable?.close();
-  }
-
-  async cleanup(): Promise<void> {
     this.encoder.close();
-    this.writable = undefined;
   }
 
   /**
@@ -221,8 +241,16 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
   protected initWritable(): void {
     this.writable = new WritableStream({
+      start: (controller) => {
+        this.writableController = controller;
+      },
       write: (frame) => {
         // 浏览器的静态帧策略是为录制设计的，直播时需要直接 close 掉所有静态帧，自己手动实现静态帧策略
+
+        if (this.muxerState !== "recording") {
+          frame.close();
+          return;
+        }
 
         if (this.state.isStill) {
           this.state.isStill = false;
@@ -326,14 +354,21 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
 
   protected initWritable(): void {
     this.writable = new WritableStream({
+      start: (controller) => {
+        this.writableController = controller;
+      },
       write: (frame) => {
+        if (this.muxerState !== "recording") {
+          frame.close();
+          return;
+        }
+
         if (this.encoder.encodeQueueSize < 2) {
           this.encoder.encode(frame);
         }
         frame.close();
       },
       close: () => {
-        this.cleanup();
         Logger.info("AudioEncoderTrack: WritableStream closed");
       },
     });
