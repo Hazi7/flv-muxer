@@ -189,17 +189,6 @@ export class FlvMuxer {
       this.#streamProcessor.close();
       this.#sourceStreamController?.close();
 
-      const videoTrack = this.#options?.video.track;
-      const audioTrack = this.#options?.audio.track;
-
-      if (videoTrack) {
-        videoTrack.stop();
-      }
-
-      if (audioTrack) {
-        audioTrack.stop();
-      }
-
       if (this.#readableHandler) {
         this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
       }

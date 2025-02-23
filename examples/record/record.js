@@ -58,6 +58,14 @@ async function startRecording() {
   flvMuxer.start();
 }
 
+function pauseRecording() {
+  flvMuxer.pause();
+}
+
+function resumeRecording() {
+  flvMuxer.resume();
+}
+
 async function stopRecording() {
   await flvMuxer.stop();
   try {

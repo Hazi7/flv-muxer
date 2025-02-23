@@ -20,7 +20,6 @@ class TrackState {
   static #instance: TrackState;
 
   baseTimestamp: number = 0;
-  isStill: boolean = false;
 
   /**
    * 获取 TrackState 的单例实例
@@ -47,9 +46,10 @@ export abstract class BaseEncoderTrack {
   writable: WritableStream | undefined;
   writableController: WritableStreamDefaultController | undefined;
   encoder!: VideoEncoder | AudioEncoder;
-  state: TrackState;
+  trackState: TrackState;
+  muxerState: MuxerState | undefined;
+
   lastTimestamp: number = 0;
-  muxerState: MuxerState;
 
   private _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
 
@@ -95,8 +95,12 @@ export abstract class BaseEncoderTrack {
     this.initEncoder(config);
     this.initWritable();
 
-    this.state = TrackState.getInstance();
+    this.trackState = TrackState.getInstance();
 
+    this.#initListeners();
+  }
+
+  #initListeners() {
     this.eventBus.on("START_MUXER", () => {
       this.muxerState = "recording";
     });
@@ -194,11 +198,11 @@ export abstract class BaseEncoderTrack {
    * @returns 相对时间戳
    */
   protected calculateTimestamp(timestamp: number) {
-    if (!this.state.baseTimestamp) {
-      this.state.baseTimestamp = timestamp;
+    if (!this.trackState.baseTimestamp) {
+      this.trackState.baseTimestamp = timestamp;
     }
 
-    return Math.max(0, (timestamp - this.state.baseTimestamp) / 1000);
+    return Math.max(0, (timestamp - this.trackState.baseTimestamp) / 1000);
   }
 }
 
@@ -207,8 +211,6 @@ export abstract class BaseEncoderTrack {
  */
 export class VideoEncoderTrack extends BaseEncoderTrack {
   private frameCount: number = 0;
-  private timer: number = 0;
-  private lastFrame: VideoFrame | undefined;
 
   /**
    * 构造函数
@@ -252,17 +254,6 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
           return;
         }
 
-        if (this.state.isStill) {
-          this.state.isStill = false;
-
-          if (frame.timestamp <= this.lastTimestamp) {
-            frame.close();
-            return;
-          }
-        }
-
-        this.#scheduleFrameProcessing(frame.clone());
-
         if (this.encoder.encodeQueueSize < 2) {
           this.frameCount++;
           this.encoder.encode(frame, {
@@ -305,30 +296,6 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     } catch (error) {
       Logger.error(`Failed to handle video chunk: ${error}`);
     }
-  }
-
-  #scheduleFrameProcessing(frame: VideoFrame) {
-    clearTimeout(this.timer);
-
-    this.lastFrame?.close();
-    this.lastFrame = frame;
-
-    this.timer = setTimeout(() => {
-      if (frame) {
-        this.state.isStill = true;
-        if (!this.lastFrame) return;
-        const videoFrame = new VideoFrame(frame, {
-          duration: 100000,
-          timestamp: this.lastFrame.timestamp + 100000,
-        });
-
-        this.encoder.encode(videoFrame as VideoFrame & AudioData, {
-          keyFrame: true,
-        });
-
-        this.#scheduleFrameProcessing(videoFrame);
-      }
-    }, 100);
   }
 }
 
