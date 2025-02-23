@@ -5,13 +5,14 @@ import {
   AVCSEStrategy,
   AVCNALUStrategy,
 } from "../strategies/mux-strategy";
+import { Logger } from "../utils/logger";
 import { AudioEncoderTrack, VideoEncoderTrack } from "./encoder-track";
 import { EventBus } from "./event-bus";
 import { FlvEncoder } from "./flv-encoder";
 import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
 export interface MuxerOptions {
-  model: "live" | "record";
+  model: "record" | "live";
   video: {
     track: MediaStreamTrack;
     config: VideoEncoderConfig;
@@ -20,6 +21,8 @@ export interface MuxerOptions {
     track: MediaStreamTrack;
     config: AudioEncoderConfig;
   };
+  chunked: boolean;
+  debug: boolean;
 }
 export type MuxerState = "inactive" | "recording" | "paused" | "stopped";
 
@@ -30,11 +33,14 @@ export class FlvMuxer {
   readonly #encoder: FlvEncoder;
   readonly #eventBus: EventBus;
   readonly #streamProcessor: StreamProcessor;
+
   #options: MuxerOptions | undefined;
   #sourceStream: ReadableStream | undefined;
   #muxStream: TransformStream | undefined;
   #outputStream: WritableStream | undefined;
   #strategies: { [key: string]: MuxStrategy } = {};
+
+  #readableHandler: undefined | ((chunk: Uint8Array) => void);
 
   /**
    * 构造函数
@@ -46,6 +52,9 @@ export class FlvMuxer {
     this.#streamProcessor = StreamProcessor.getInstance();
 
     this.#outputStream = writable;
+
+    this.#initSourceStream();
+    this.#initMuxStream();
 
     // 初始化策略
     this.#initStrategies();
@@ -67,18 +76,25 @@ export class FlvMuxer {
   #initSourceStream() {
     this.#sourceStream = new ReadableStream({
       start: (controller) => {
-        this.#eventBus.on("CHUNK_PUBLISH", (chunk) => {
+        this.#readableHandler = (chunk: Uint8Array) => {
           controller.enqueue(chunk);
-        });
+        };
+
+        this.#eventBus.on("CHUNK_PUBLISH", this.#readableHandler);
       },
       cancel: () => {
-        // TODO 释放资源
+        if (this.#readableHandler) {
+          this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
+        }
+
+        this.#readableHandler = undefined;
+        this.#sourceStream = undefined;
       },
     });
   }
 
   /**
-   * 初始化多路复用流
+   * 初始化多路复用流（将 TrackChunk 转换为 FLV 包）
    */
   #initMuxStream() {
     this.#muxStream = new TransformStream({
@@ -95,9 +111,8 @@ export class FlvMuxer {
         const tag = this.#muxChunk(chunk);
         controller.enqueue(tag);
       },
-      flush: (controller) => {
-        // TODO 释放资源
-        console.log(controller);
+      flush: () => {
+        this.#muxStream = undefined;
       },
     });
   }
@@ -135,9 +150,6 @@ export class FlvMuxer {
     }
 
     try {
-      this.#initSourceStream();
-      this.#initMuxStream();
-
       if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
         throw new Error("Failed to initialize streams");
       }
@@ -145,28 +157,39 @@ export class FlvMuxer {
       this.#sourceStream
         .pipeThrough(this.#muxStream)
         .pipeTo(this.#outputStream);
+
+      this.#streamProcessor.start();
     } catch (error) {
       throw new Error(`Error starting Muxer: ${error}`);
     }
-
-    this.#streamProcessor.start();
   }
 
-  pause() {}
+  pause() {
+    if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
+      throw new Error("Muxer is not running.");
+    }
 
-  resume() {}
+    // 暂停流处理
+    this.#streamProcessor.stop();
+  }
+
+  /**
+   * 恢复多路复用器
+   */
+  resume() {
+    this.#streamProcessor.start();
+  }
 
   /**
    * 停止多路复用器
    */
   stop() {
     try {
-      this.#sourceStream = undefined;
-      this.#outputStream = undefined;
-
-      this.#streamProcessor.stop();
+      // 关闭
+      this.#sourceStream?.cancel();
+      this.#streamProcessor.close();
     } catch (error) {
-      console.error(error);
+      Logger.error(`Error stopping Muxer: ${error}`);
     }
   }
 
@@ -206,7 +229,7 @@ export class FlvMuxer {
 
       return scriptData;
     } catch (error) {
-      console.error(`Failed to write metadata: ${error}`);
+      Logger.error(`Failed to write metadata: ${error}`);
     }
   }
 

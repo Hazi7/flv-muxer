@@ -103,7 +103,7 @@ export class StreamProcessor {
 
   start() {
     if (this.#isProcessing) {
-      throw new Error("已经开始");
+      throw new Error("");
     }
 
     this.audioEncoderTrack?.start();
@@ -119,8 +119,8 @@ export class StreamProcessor {
       );
     }
 
-    this.audioEncoderTrack?.stop();
-    this.videoEncoderTrack?.stop();
+    this.audioEncoderTrack?.flush();
+    this.videoEncoderTrack?.flush();
 
     this.#isProcessing = false;
   }

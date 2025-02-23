@@ -1,3 +1,4 @@
+import { Logger } from "../utils/logger";
 import { EventBus } from "./event-bus";
 import { type TrackChunk } from "./stream-processor";
 
@@ -37,10 +38,12 @@ class TrackState {
  * 抽象基类，用于处理编码轨道
  */
 export abstract class BaseEncoderTrack {
-  readonly processor: MediaStreamTrackProcessor;
+  readonly trackProcessor: MediaStreamTrackProcessor;
   readonly queue: TrackChunk[] = [];
   readonly eventBus: EventBus;
 
+  transform: TransformStream | undefined;
+  writable: WritableStream | undefined;
   encoder!: VideoEncoder | AudioEncoder;
   state: TrackState;
   lastTimestamp: number = 0;
@@ -79,10 +82,12 @@ export abstract class BaseEncoderTrack {
    */
   constructor(
     track: MediaStreamTrack,
-    config: VideoEncoderConfig | AudioEncoderConfig
+    config: VideoEncoderConfig | AudioEncoderConfig,
+    transform?: TransformStream
   ) {
-    this.processor = new MediaStreamTrackProcessor({ track });
+    this.trackProcessor = new MediaStreamTrackProcessor({ track });
     this.eventBus = EventBus.getInstance();
+    this.transform = transform;
 
     this.initEncoder(config);
 
@@ -107,11 +112,7 @@ export abstract class BaseEncoderTrack {
     config: VideoEncoderConfig | AudioEncoderConfig
   ): void;
 
-  /**
-   * 启动编码轨道
-   * @returns Promise<void>
-   */
-  protected abstract start(): Promise<void>;
+  protected abstract initWritable(): void;
 
   enqueue(chunk: TrackChunk): void {
     this.queue.push(chunk);
@@ -130,10 +131,26 @@ export abstract class BaseEncoderTrack {
   }
 
   /**
+   * 启动编码轨道
+   * @returns Promise<void>
+   */
+  async start(): Promise<void> {
+    if (this.writable) {
+      if (this.transform) {
+        await this.trackProcessor.readable
+          .pipeThrough(this.transform)
+          .pipeTo(this.writable);
+      } else {
+        await this.trackProcessor.readable.pipeTo(this.writable);
+      }
+    }
+  }
+
+  /**
    * 停止编码轨道
    * @returns Promise<void>
    */
-  async stop(): Promise<void> {
+  async flush(): Promise<void> {
     await this.encoder.flush();
   }
 
@@ -142,7 +159,13 @@ export abstract class BaseEncoderTrack {
    * @returns Promise<void>
    */
   async close(): Promise<void> {
+    await this.trackProcessor.readable.cancel();
+    await this.writable?.close();
+  }
+
+  async cleanup(): Promise<void> {
     this.encoder.close();
+    this.writable = undefined;
   }
 
   /**
@@ -172,8 +195,12 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
    * @param track 媒体流轨道
    * @param config 视频编码器配置
    */
-  constructor(track: MediaStreamTrack, config: VideoEncoderConfig) {
-    super(track, config);
+  constructor(
+    track: MediaStreamTrack,
+    config: VideoEncoderConfig,
+    transform?: TransformStream
+  ) {
+    super(track, config, transform);
   }
 
   /**
@@ -183,46 +210,40 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
   protected initEncoder(config: VideoEncoderConfig): void {
     this.encoder = new VideoEncoder({
       output: this.handleOutput.bind(this),
-      error: (e) => {
-        console.error("VideoEncoder error:", e);
+      error: (error) => {
+        Logger.error(`VideoEncoder error: ${error}`);
+        throw new Error(error.message);
       },
     });
 
     this.encoder.configure(config);
   }
 
-  /**
-   * 启动视频编码轨道
-   * @returns Promise<void>
-   */
-  async start(): Promise<void> {
-    await this.processor.readable.pipeTo(
-      new WritableStream({
-        write: (frame) => {
-          // TODO 对外暴露 VideoFrame，以用于美颜算法、抠像等...
-          // 浏览器的静态帧策略是为录制设计的，直播时需要直接 close 掉所有静态帧，自己手动实现静态帧策略
+  protected initWritable(): void {
+    this.writable = new WritableStream({
+      write: (frame) => {
+        // 浏览器的静态帧策略是为录制设计的，直播时需要直接 close 掉所有静态帧，自己手动实现静态帧策略
 
-          if (this.state.isStill) {
-            this.state.isStill = false;
+        if (this.state.isStill) {
+          this.state.isStill = false;
 
-            if (frame.timestamp <= this.lastTimestamp) {
-              frame.close();
-              return;
-            }
+          if (frame.timestamp <= this.lastTimestamp) {
+            frame.close();
+            return;
           }
+        }
 
-          this.#scheduleFrameProcessing(frame.clone());
+        this.#scheduleFrameProcessing(frame.clone());
 
-          if (this.encoder.encodeQueueSize < 2) {
-            this.frameCount++;
-            this.encoder.encode(frame, {
-              keyFrame: this.frameCount % 60 === 0,
-            });
-          }
-          frame.close();
-        },
-      })
-    );
+        if (this.encoder.encodeQueueSize < 2) {
+          this.frameCount++;
+          this.encoder.encode(frame, {
+            keyFrame: this.frameCount % 60 === 0,
+          });
+        }
+        frame.close();
+      },
+    });
   }
 
   /**
@@ -254,7 +275,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
       });
       this.lastTimestamp = timestamp;
     } catch (error) {
-      console.error(`Failed to handle video chunk: ${error}`);
+      Logger.error(`Failed to handle video chunk: ${error}`);
     }
   }
 
@@ -272,8 +293,6 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
           duration: 100000,
           timestamp: this.lastFrame.timestamp + 100000,
         });
-
-        console.log(videoFrame);
 
         this.encoder.encode(videoFrame as VideoFrame & AudioData, {
           keyFrame: true,
@@ -296,29 +315,28 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
   protected initEncoder(config: AudioEncoderConfig): void {
     this.encoder = new AudioEncoder({
       output: this.handleOutput.bind(this),
-      error: (e) => {
-        console.error("AudioEncoder error:", e);
+      error: (error) => {
+        Logger.error(`AudioEncoder error:", ${error.message} `);
+        throw new Error(error.message);
       },
     });
 
     this.encoder.configure(config);
   }
 
-  /**
-   * 启动音频编码轨道
-   * @returns Promise<void>
-   */
-  async start(): Promise<void> {
-    await this.processor.readable.pipeTo(
-      new WritableStream({
-        write: (frame) => {
-          if (this.encoder.encodeQueueSize < 2) {
-            this.encoder.encode(frame);
-          }
-          frame.close();
-        },
-      })
-    );
+  protected initWritable(): void {
+    this.writable = new WritableStream({
+      write: (frame) => {
+        if (this.encoder.encodeQueueSize < 2) {
+          this.encoder.encode(frame);
+        }
+        frame.close();
+      },
+      close: () => {
+        this.cleanup();
+        Logger.info("AudioEncoderTrack: WritableStream closed");
+      },
+    });
   }
 
   /**
@@ -350,7 +368,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
       });
       this.lastTimestamp = timestamp;
     } catch (error) {
-      console.error(`Failed to handle audio chunk: ${error}`);
+      Logger.error(`Failed to handle audio chunk: ${error}`);
     }
   }
 }
