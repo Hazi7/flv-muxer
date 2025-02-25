@@ -33,7 +33,7 @@ async function startRecording() {
 
   flvMuxer = new FlvMuxer(writable);
 
-  await flvMuxer.configure({
+  flvMuxer.configure({
     video: {
       track: videoTrack,
       config: {
@@ -41,7 +41,6 @@ async function startRecording() {
         width: 2560,
         height: 1440,
         framerate: 30,
-        latencyMode: "realtime",
       },
     },
     audio: {
@@ -50,9 +49,9 @@ async function startRecording() {
         codec: "mp4a.40.29",
         sampleRate: 44100,
         numberOfChannels: 2,
-        bitrate: 128000,
       },
     },
+    mode: "record",
   });
 
   flvMuxer.start();
@@ -67,7 +66,7 @@ function resumeRecording() {
 }
 
 async function stopRecording() {
-  await flvMuxer.stop();
+  flvMuxer.stop();
   try {
     // Save the file
     const fileHandle = await window.showSaveFilePicker({

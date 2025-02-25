@@ -1,6 +1,6 @@
 import { Logger } from "../utils/logger";
 import { EventBus } from "./event-bus";
-import type { MuxerState } from "./flv-muxer";
+import type { MuxerMode, MuxerState } from "./flv-muxer";
 import { type TrackChunk } from "./stream-processor";
 
 /**
@@ -23,6 +23,7 @@ class TrackState {
 
   /**
    * 获取 TrackState 的单例实例
+   *
    * @returns TrackState 的单例实例
    */
   static getInstance() {
@@ -48,6 +49,7 @@ export abstract class BaseEncoderTrack {
   encoder!: VideoEncoder | AudioEncoder;
   trackState: TrackState;
   muxerState: MuxerState | undefined;
+  mode: MuxerMode;
 
   lastTimestamp: number = 0;
 
@@ -86,11 +88,13 @@ export abstract class BaseEncoderTrack {
   constructor(
     track: MediaStreamTrack,
     config: VideoEncoderConfig | AudioEncoderConfig,
+    mode: MuxerMode,
     transform?: TransformStream
   ) {
     this.processor = new MediaStreamTrackProcessor({ track });
     this.eventBus = EventBus.getInstance();
     this.transform = transform;
+    this.mode = mode;
 
     this.initEncoder(config);
     this.initWritable();
@@ -220,9 +224,10 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
   constructor(
     track: MediaStreamTrack,
     config: VideoEncoderConfig,
+    mode: MuxerMode,
     transform?: TransformStream
   ) {
-    super(track, config, transform);
+    super(track, config, mode, transform);
   }
 
   /**
@@ -247,8 +252,6 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
         this.writableController = controller;
       },
       write: (frame) => {
-        // 浏览器的静态帧策略是为录制设计的，直播时需要直接 close 掉所有静态帧，自己手动实现静态帧策略
-
         if (this.muxerState !== "recording") {
           frame.close();
           return;
@@ -256,9 +259,15 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
         if (this.encoder.encodeQueueSize < 2) {
           this.frameCount++;
-          this.encoder.encode(frame, {
-            keyFrame: this.frameCount % 60 === 0,
-          });
+          if (this.mode === "live") {
+            this.encoder.encode(frame, {
+              keyFrame: this.frameCount % 60 === 0,
+            });
+          } else {
+            this.encoder.encode(frame, {
+              keyFrame: this.frameCount % 120 === 0,
+            });
+          }
         }
         frame.close();
       },
