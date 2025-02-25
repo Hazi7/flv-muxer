@@ -186,8 +186,8 @@ export class FlvMuxer {
     this.#muxStream = new TransformStream({
       start: async (controller) => {
         const header = this.#encoder.encodeFlvHeader(
-          !!this.#options?.video,
-          !!this.#options?.audio
+          !!this.#options?.video.track,
+          !!this.#options?.audio.track
         );
         const metadata = this.#encodeMetadata();
         controller.enqueue(header);
@@ -213,24 +213,24 @@ export class FlvMuxer {
         encoder: "flv-muxer.js",
       };
 
-      if (this.#options?.video) {
+      if (this.#options?.video.track) {
         const { config } = this.#options.video;
 
         Object.assign(metadata, {
+          videocodecid: 7,
           width: config.width,
           height: config.height,
-          framerate: 30,
-          videocodecid: 7,
+          framerate: config.framerate,
         });
       }
 
-      if (this.#options?.audio) {
+      if (this.#options?.audio.track) {
         const { config } = this.#options.audio;
 
         Object.assign(metadata, {
           audiocodecid: 10,
-          audiodatarate: config.bitrate || 128,
-          stereo: true,
+          audiodatarate: (config.bitrate ?? 0) / 1000,
+          stereo: config.numberOfChannels === 2,
           audiosamplerate: config.sampleRate,
         });
       }

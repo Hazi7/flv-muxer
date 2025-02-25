@@ -34,6 +34,7 @@ async function startRecording() {
   flvMuxer = new FlvMuxer(writable);
 
   flvMuxer.configure({
+    mode: "record",
     video: {
       track: videoTrack,
       config: {
@@ -51,7 +52,6 @@ async function startRecording() {
         numberOfChannels: 2,
       },
     },
-    mode: "record",
   });
 
   flvMuxer.start();
