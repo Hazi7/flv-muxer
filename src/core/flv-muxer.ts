@@ -70,46 +70,6 @@ export class FlvMuxer {
   }
 
   /**
-   * 初始化源流
-   */
-  #initSourceStream() {
-    this.#sourceStream = new ReadableStream({
-      start: (controller) => {
-        this.#sourceStreamController = controller;
-        this.#readableHandler = (chunk: Uint8Array) => {
-          controller.enqueue(chunk);
-        };
-
-        this.#eventBus.on("CHUNK_PUBLISH", this.#readableHandler);
-      },
-    });
-  }
-
-  /**
-   * 初始化多路复用流（将 TrackChunk 转换为 FLV 包）
-   */
-  #initMuxStream() {
-    this.#muxStream = new TransformStream({
-      start: async (controller) => {
-        const header = this.#encoder.encodeFlvHeader(
-          !!this.#options?.video,
-          !!this.#options?.audio
-        );
-        const metadata = this.#encodeMetadata();
-        controller.enqueue(header);
-        controller.enqueue(metadata);
-      },
-      transform: (chunk, controller) => {
-        const tag = this.#muxChunk(chunk);
-        controller.enqueue(tag);
-      },
-      flush: () => {
-        this.#muxStream = undefined;
-      },
-    });
-  }
-
-  /**
    * 配置多路复用器选项
    * @param options - 多路复用器选项
    */
@@ -201,6 +161,46 @@ export class FlvMuxer {
     } catch (error) {
       Logger.error(`Error stopping Muxer: ${error}`);
     }
+  }
+
+  /**
+   * 初始化源流
+   */
+  #initSourceStream() {
+    this.#sourceStream = new ReadableStream({
+      start: (controller) => {
+        this.#sourceStreamController = controller;
+        this.#readableHandler = (chunk: Uint8Array) => {
+          controller.enqueue(chunk);
+        };
+
+        this.#eventBus.on("CHUNK_PUBLISH", this.#readableHandler);
+      },
+    });
+  }
+
+  /**
+   * 初始化多路复用流（将 TrackChunk 转换为 FLV 包）
+   */
+  #initMuxStream() {
+    this.#muxStream = new TransformStream({
+      start: async (controller) => {
+        const header = this.#encoder.encodeFlvHeader(
+          !!this.#options?.video,
+          !!this.#options?.audio
+        );
+        const metadata = this.#encodeMetadata();
+        controller.enqueue(header);
+        controller.enqueue(metadata);
+      },
+      transform: (chunk, controller) => {
+        const tag = this.#muxChunk(chunk);
+        controller.enqueue(tag);
+      },
+      flush: () => {
+        this.#muxStream = undefined;
+      },
+    });
   }
 
   /**

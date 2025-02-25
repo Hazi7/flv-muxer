@@ -261,11 +261,11 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
           this.frameCount++;
           if (this.mode === "live") {
             this.encoder.encode(frame, {
-              keyFrame: this.frameCount % 60 === 0,
+              keyFrame: this.frameCount % 30 === 0,
             });
           } else {
             this.encoder.encode(frame, {
-              keyFrame: this.frameCount % 120 === 0,
+              keyFrame: this.frameCount % 60 === 0,
             });
           }
         }
