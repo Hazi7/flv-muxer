@@ -11,8 +11,10 @@ import { EventBus } from "./event-bus";
 import { FlvEncoder } from "./flv-encoder";
 import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
+export type MuxerMode = "record" | "live";
+
 export interface MuxerOptions {
-  model: "record" | "live";
+  mode: MuxerMode;
   video: {
     track: MediaStreamTrack;
     config: VideoEncoderConfig;
@@ -52,9 +54,6 @@ export class FlvMuxer {
     this.#streamProcessor = StreamProcessor.getInstance();
 
     this.#outputStream = writable;
-
-    this.#initSourceStream();
-    this.#initMuxStream();
 
     // 初始化策略
     this.#initStrategies();
@@ -121,7 +120,7 @@ export class FlvMuxer {
 
     if (audioTrack && audioConfig) {
       this.#streamProcessor.addAudioTrack(
-        new AudioEncoderTrack(audioTrack, audioConfig)
+        new AudioEncoderTrack(audioTrack, audioConfig, this.#options.mode)
       );
     }
 
@@ -129,7 +128,7 @@ export class FlvMuxer {
 
     if (videoTrack && videoConfig) {
       this.#streamProcessor.addVideoTrack(
-        new VideoEncoderTrack(videoTrack, videoConfig)
+        new VideoEncoderTrack(videoTrack, videoConfig, this.#options.mode)
       );
     }
   }
@@ -143,6 +142,9 @@ export class FlvMuxer {
     }
 
     try {
+      this.#initSourceStream();
+      this.#initMuxStream();
+
       if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
         throw new Error("Failed to initialize streams");
       }
@@ -151,21 +153,18 @@ export class FlvMuxer {
 
       this.#streamProcessor.start();
 
-      this.#sourceStream
+      await this.#sourceStream
         .pipeThrough(this.#muxStream)
-        .pipeTo(this.#outputStream)
-        .then(() => {
-          this.#sourceStream?.cancel();
-        })
-        .catch((error) => {
-          console.error("Error during stream processing:", error);
-        });
+        .pipeTo(this.#outputStream);
+
+      // 取消流
+      this.#sourceStream?.cancel();
     } catch (error) {
       throw new Error(`Error starting Muxer: ${error}`);
     }
   }
 
-  async pause() {
+  pause() {
     if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
       throw new Error("Muxer is not running.");
     }
@@ -176,7 +175,7 @@ export class FlvMuxer {
   /**
    * 恢复多路复用器
    */
-  async resume() {
+  resume() {
     if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
       throw new Error("Muxer is not running.");
     }
@@ -187,7 +186,7 @@ export class FlvMuxer {
   /**
    * 停止多路复用器
    */
-  async stop() {
+  stop() {
     try {
       this.#eventBus.emit("STOP_MUXER");
       this.#streamProcessor.close();
@@ -255,7 +254,5 @@ export class FlvMuxer {
     if (strategy) {
       return strategy.process(chunk, this.#encoder);
     }
-
-    return;
   }
 }
