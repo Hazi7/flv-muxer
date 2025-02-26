@@ -43,12 +43,12 @@ export abstract class BaseEncoderTrack {
   readonly queue: TrackChunk[] = [];
   readonly eventBus: EventBus;
 
-  transform: TransformStream | undefined;
   writable: WritableStream | undefined;
   writableController: WritableStreamDefaultController | undefined;
   encoder!: VideoEncoder | AudioEncoder;
   trackState: TrackState;
   muxerState: MuxerState | undefined;
+  config: VideoEncoderConfig | AudioEncoderConfig;
   mode: MuxerMode;
 
   lastTimestamp: number = 0;
@@ -88,12 +88,11 @@ export abstract class BaseEncoderTrack {
   constructor(
     track: MediaStreamTrack,
     config: VideoEncoderConfig | AudioEncoderConfig,
-    mode: MuxerMode,
-    transform?: TransformStream
+    mode: MuxerMode
   ) {
     this.processor = new MediaStreamTrackProcessor({ track });
     this.eventBus = EventBus.getInstance();
-    this.transform = transform;
+    this.config = config;
     this.mode = mode;
 
     this.initEncoder(config);
@@ -164,19 +163,7 @@ export abstract class BaseEncoderTrack {
    */
   async start(): Promise<void> {
     if (this.writable) {
-      if (this.transform) {
-        await this.processor.readable
-          .pipeThrough(this.transform)
-          .pipeTo(this.writable)
-          .then(() => {
-            this.processor.readable.cancel();
-          })
-          .catch((error) => {
-            console.error("pipeTo error:", error);
-          });
-      } else {
-        await this.processor.readable.pipeTo(this.writable);
-      }
+      await this.processor.readable.pipeTo(this.writable);
     }
   }
 
@@ -215,6 +202,7 @@ export abstract class BaseEncoderTrack {
  */
 export class VideoEncoderTrack extends BaseEncoderTrack {
   private frameCount: number = 0;
+  private keyframeInterval: number;
 
   /**
    * 构造函数
@@ -225,9 +213,11 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     track: MediaStreamTrack,
     config: VideoEncoderConfig,
     mode: MuxerMode,
-    transform?: TransformStream
+    keyframeInterval: number
   ) {
-    super(track, config, mode, transform);
+    super(track, config, mode);
+
+    this.keyframeInterval = keyframeInterval;
   }
 
   /**
@@ -265,7 +255,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
             });
           } else {
             this.encoder.encode(frame, {
-              keyFrame: this.frameCount % 150 === 0,
+              keyFrame: this.frameCount % this.keyframeInterval === 0,
             });
           }
         }
