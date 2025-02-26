@@ -15,16 +15,18 @@ export type MuxerMode = "record" | "live";
 
 export interface MuxerOptions {
   mode: MuxerMode;
+  chunked: boolean;
   video: {
     track: MediaStreamTrack;
-    config: VideoEncoderConfig;
+    encoderConfig: VideoEncoderConfig;
+    keyframeInterval: number;
   };
   audio: {
     track: MediaStreamTrack;
-    config: AudioEncoderConfig;
+    encoderConfig: AudioEncoderConfig;
   };
-  chunked: boolean;
 }
+
 export type MuxerState = "recording" | "paused" | "stopped";
 
 /**
@@ -76,19 +78,28 @@ export class FlvMuxer {
   configure(options: MuxerOptions) {
     this.#options = options;
 
-    const { track: audioTrack, config: audioConfig } = options.audio;
+    const { track: audioTrack, encoderConfig: audioConfig } = options.audio;
 
     if (audioTrack && audioConfig) {
       this.#streamProcessor.addAudioTrack(
-        new AudioEncoderTrack(audioTrack, audioConfig, this.#options.mode)
+        new AudioEncoderTrack(audioTrack, audioConfig, options.mode)
       );
     }
 
-    const { track: videoTrack, config: videoConfig } = options.video;
+    const {
+      track: videoTrack,
+      encoderConfig: videoConfig,
+      keyframeInterval,
+    } = options.video;
 
     if (videoTrack && videoConfig) {
       this.#streamProcessor.addVideoTrack(
-        new VideoEncoderTrack(videoTrack, videoConfig, this.#options.mode)
+        new VideoEncoderTrack(
+          videoTrack,
+          videoConfig,
+          options.mode,
+          keyframeInterval
+        )
       );
     }
   }
@@ -151,13 +162,6 @@ export class FlvMuxer {
       this.#eventBus.emit("STOP_MUXER");
       this.#streamProcessor.close();
       this.#sourceStreamController?.close();
-
-      if (this.#readableHandler) {
-        this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
-      }
-
-      this.#readableHandler = undefined;
-      this.#sourceStream = undefined;
     } catch (error) {
       Logger.error(`Error stopping Muxer: ${error}`);
     }
@@ -175,6 +179,14 @@ export class FlvMuxer {
         };
 
         this.#eventBus.on("CHUNK_PUBLISH", this.#readableHandler);
+      },
+      cancel: () => {
+        if (this.#readableHandler) {
+          this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
+        }
+
+        this.#readableHandler = undefined;
+        this.#sourceStream = undefined;
       },
     });
   }
@@ -214,7 +226,7 @@ export class FlvMuxer {
       };
 
       if (this.#options?.video.track) {
-        const { config } = this.#options.video;
+        const { encoderConfig: config } = this.#options.video;
 
         Object.assign(metadata, {
           videocodecid: 7,
@@ -225,7 +237,7 @@ export class FlvMuxer {
       }
 
       if (this.#options?.audio.track) {
-        const { config } = this.#options.audio;
+        const { encoderConfig: config } = this.#options.audio;
 
         Object.assign(metadata, {
           audiocodecid: 10,
