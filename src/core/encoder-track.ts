@@ -39,18 +39,14 @@ class TrackState {
  * 抽象基类，用于处理编码轨道
  */
 export abstract class BaseEncoderTrack {
-  readonly processor: MediaStreamTrackProcessor;
-  readonly queue: TrackChunk[] = [];
   readonly eventBus: EventBus;
+  readonly queue: TrackChunk[] = [];
+  readonly mode: MuxerMode;
+  readonly config: VideoEncoderConfig | AudioEncoderConfig;
 
-  writable: WritableStream | undefined;
-  writableController: WritableStreamDefaultController | undefined;
-  encoder!: VideoEncoder | AudioEncoder;
+  encoder: VideoEncoder | AudioEncoder | undefined;
   trackState: TrackState;
   muxerState: MuxerState | undefined;
-  config: VideoEncoderConfig | AudioEncoderConfig;
-  mode: MuxerMode;
-
   lastTimestamp: number = 0;
 
   private _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
@@ -86,40 +82,18 @@ export abstract class BaseEncoderTrack {
    * @param config 编码器配置
    */
   constructor(
-    track: MediaStreamTrack,
     config: VideoEncoderConfig | AudioEncoderConfig,
     mode: MuxerMode
   ) {
-    this.processor = new MediaStreamTrackProcessor({ track });
     this.eventBus = EventBus.getInstance();
+    this.trackState = TrackState.getInstance();
     this.config = config;
     this.mode = mode;
 
     this.initEncoder(config);
-    this.initWritable();
-
-    this.trackState = TrackState.getInstance();
-
-    this.#initListeners();
   }
 
-  #initListeners() {
-    this.eventBus.on("START_MUXER", () => {
-      this.muxerState = "recording";
-    });
-
-    this.eventBus.on("STOP_MUXER", () => {
-      this.muxerState = "stopped";
-    });
-
-    this.eventBus.on("RESUME_MUXER", () => {
-      this.muxerState = "recording";
-    });
-
-    this.eventBus.on("PAUSE_MUXER", () => {
-      this.muxerState = "paused";
-    });
-  }
+  abstract addTrackChunk(chunk: VideoFrame | AudioData): void;
 
   /**
    * 处理编码输出
@@ -138,8 +112,6 @@ export abstract class BaseEncoderTrack {
   protected abstract initEncoder(
     config: VideoEncoderConfig | AudioEncoderConfig
   ): void;
-
-  protected abstract initWritable(): void;
 
   enqueue(chunk: TrackChunk): void {
     this.queue.push(chunk);
@@ -161,10 +133,8 @@ export abstract class BaseEncoderTrack {
    * 启动编码轨道
    * @returns Promise<void>
    */
-  async start(): Promise<void> {
-    if (this.writable) {
-      await this.processor.readable.pipeTo(this.writable);
-    }
+  start() {
+    this.muxerState = "recording";
   }
 
   /**
@@ -172,14 +142,24 @@ export abstract class BaseEncoderTrack {
    * @returns Promise<void>
    */
   async flush(): Promise<void> {
-    await this.encoder.flush();
+    if (!this.encoder) {
+      throw new Error("Encoder is not initialized.");
+    }
+
+    this.muxerState = "paused";
+    return this.encoder.flush();
   }
 
   /**
    * 关闭编码轨道
    * @returns Promise<void>
    */
-  async close(): Promise<void> {
+  close(): void {
+    if (!this.encoder) {
+      throw new Error("Encoder is not initialized.");
+    }
+
+    this.muxerState = "stopped";
     this.encoder.close();
   }
 
@@ -202,7 +182,7 @@ export abstract class BaseEncoderTrack {
  */
 export class VideoEncoderTrack extends BaseEncoderTrack {
   private frameCount: number = 0;
-  private keyframeInterval: number;
+  private keyframeInterval: number = 90;
 
   /**
    * 构造函数
@@ -210,12 +190,11 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
    * @param config 视频编码器配置
    */
   constructor(
-    track: MediaStreamTrack,
     config: VideoEncoderConfig,
     mode: MuxerMode,
     keyframeInterval: number
   ) {
-    super(track, config, mode);
+    super(config, mode);
 
     this.keyframeInterval = keyframeInterval;
   }
@@ -236,32 +215,25 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     this.encoder.configure(config);
   }
 
-  protected initWritable(): void {
-    this.writable = new WritableStream({
-      start: (controller) => {
-        this.writableController = controller;
-      },
-      write: (frame) => {
-        if (this.muxerState !== "recording") {
-          frame.close();
-          return;
-        }
+  addTrackChunk(chunk: VideoFrame | AudioData): void {
+    if (this.muxerState !== "recording") {
+      chunk.close();
+      return;
+    }
 
-        if (this.encoder.encodeQueueSize < 2) {
-          this.frameCount++;
-          if (this.mode === "live") {
-            this.encoder.encode(frame, {
-              keyFrame: this.frameCount % 60 === 0,
-            });
-          } else {
-            this.encoder.encode(frame, {
-              keyFrame: this.frameCount % this.keyframeInterval === 0,
-            });
-          }
-        }
-        frame.close();
-      },
-    });
+    if (!this.encoder) {
+      throw new Error("Encoder is not initialized.");
+    }
+
+    if (this.encoder.encodeQueueSize < 2) {
+      this.frameCount++;
+
+      this.encoder.encode(chunk as VideoFrame & AudioData, {
+        keyFrame: this.frameCount % this.keyframeInterval === 0,
+      });
+    }
+
+    chunk.close();
   }
 
   /**
@@ -318,26 +290,20 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
     this.encoder.configure(config);
   }
 
-  protected initWritable(): void {
-    this.writable = new WritableStream({
-      start: (controller) => {
-        this.writableController = controller;
-      },
-      write: (frame) => {
-        if (this.muxerState !== "recording") {
-          frame.close();
-          return;
-        }
+  addTrackChunk(chunk: VideoFrame | AudioData): void {
+    if (this.muxerState !== "recording") {
+      chunk.close();
+      return;
+    }
 
-        if (this.encoder.encodeQueueSize < 2) {
-          this.encoder.encode(frame);
-        }
-        frame.close();
-      },
-      close: () => {
-        Logger.info("AudioEncoderTrack: WritableStream closed");
-      },
-    });
+    if (!this.encoder) {
+      throw new Error("Encoder is not initialized.");
+    }
+
+    if (this.encoder.encodeQueueSize < 2) {
+      this.encoder.encode(chunk as VideoFrame & AudioData);
+    }
+    chunk.close();
   }
 
   /**

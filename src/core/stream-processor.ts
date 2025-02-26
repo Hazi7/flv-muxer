@@ -55,6 +55,14 @@ export class StreamProcessor {
     return this.instance;
   }
 
+  addTrackChunk(type: "audio" | "video", chunk: VideoFrame | AudioData) {
+    if (type === "audio") {
+      this.audioEncoderTrack?.addTrackChunk(chunk);
+    } else if (type === "video") {
+      this.videoEncoderTrack?.addTrackChunk(chunk);
+    }
+  }
+
   addAudioTrack(track: AudioEncoderTrack) {
     this.audioEncoderTrack = track;
   }

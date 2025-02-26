@@ -16,13 +16,11 @@ export type MuxerMode = "record" | "live";
 export interface MuxerOptions {
   mode: MuxerMode;
   chunked: boolean;
-  video: {
-    track: MediaStreamTrack;
+  video?: {
     encoderConfig: VideoEncoderConfig;
     keyframeInterval: number;
   };
-  audio: {
-    track: MediaStreamTrack;
+  audio?: {
     encoderConfig: AudioEncoderConfig;
   };
 }
@@ -71,6 +69,12 @@ export class FlvMuxer {
     this.#strategies["AVC_NALU"] = new AVCNALUStrategy();
   }
 
+  addChunk(type: "audio" | "video", chunk: VideoFrame | AudioData) {
+    if (type === "audio") {
+      this.#streamProcessor.addTrackChunk(type, chunk);
+    }
+  }
+
   /**
    * 配置多路复用器选项
    * @param options - 多路复用器选项
@@ -78,29 +82,24 @@ export class FlvMuxer {
   configure(options: MuxerOptions) {
     this.#options = options;
 
-    const { track: audioTrack, encoderConfig: audioConfig } = options.audio;
+    if (options.audio) {
+      const { encoderConfig: audioConfig } = options.audio;
 
-    if (audioTrack && audioConfig) {
-      this.#streamProcessor.addAudioTrack(
-        new AudioEncoderTrack(audioTrack, audioConfig, options.mode)
-      );
+      if (audioConfig) {
+        this.#streamProcessor.addAudioTrack(
+          new AudioEncoderTrack(audioConfig, options.mode)
+        );
+      }
     }
 
-    const {
-      track: videoTrack,
-      encoderConfig: videoConfig,
-      keyframeInterval,
-    } = options.video;
+    if (options.video) {
+      const { encoderConfig: videoConfig, keyframeInterval } = options.video;
 
-    if (videoTrack && videoConfig) {
-      this.#streamProcessor.addVideoTrack(
-        new VideoEncoderTrack(
-          videoTrack,
-          videoConfig,
-          options.mode,
-          keyframeInterval
-        )
-      );
+      if (videoConfig) {
+        this.#streamProcessor.addVideoTrack(
+          new VideoEncoderTrack(videoConfig, options.mode, keyframeInterval)
+        );
+      }
     }
   }
 
@@ -120,8 +119,6 @@ export class FlvMuxer {
         throw new Error("Failed to initialize streams");
       }
 
-      this.#eventBus.emit("START_MUXER");
-
       this.#streamProcessor.start();
 
       await this.#sourceStream
@@ -140,7 +137,7 @@ export class FlvMuxer {
       throw new Error("Muxer is not running.");
     }
 
-    this.#eventBus.emit("PAUSE_MUXER");
+    this.#streamProcessor.stop();
   }
 
   /**
@@ -151,7 +148,7 @@ export class FlvMuxer {
       throw new Error("Muxer is not running.");
     }
 
-    this.#eventBus.emit("RESUME_MUXER");
+    this.#streamProcessor.start();
   }
 
   /**
@@ -159,7 +156,6 @@ export class FlvMuxer {
    */
   stop() {
     try {
-      this.#eventBus.emit("STOP_MUXER");
       this.#streamProcessor.close();
       this.#sourceStreamController?.close();
     } catch (error) {
@@ -198,8 +194,8 @@ export class FlvMuxer {
     this.#muxStream = new TransformStream({
       start: async (controller) => {
         const header = this.#encoder.encodeFlvHeader(
-          !!this.#options?.video.track,
-          !!this.#options?.audio.track
+          !!this.#options?.video,
+          !!this.#options?.audio
         );
         const metadata = this.#encodeMetadata();
         controller.enqueue(header);
@@ -225,25 +221,25 @@ export class FlvMuxer {
         encoder: "flv-muxer.js",
       };
 
-      if (this.#options?.video.track) {
-        const { encoderConfig: config } = this.#options.video;
+      if (this.#options?.video) {
+        const { encoderConfig } = this.#options.video;
 
         Object.assign(metadata, {
           videocodecid: 7,
-          width: config.width,
-          height: config.height,
-          framerate: config.framerate,
+          width: encoderConfig.width,
+          height: encoderConfig.height,
+          framerate: encoderConfig.framerate,
         });
       }
 
-      if (this.#options?.audio.track) {
-        const { encoderConfig: config } = this.#options.audio;
+      if (this.#options?.audio) {
+        const { encoderConfig } = this.#options.audio;
 
         Object.assign(metadata, {
           audiocodecid: 10,
-          audiodatarate: (config.bitrate ?? 0) / 1000,
-          stereo: config.numberOfChannels === 2,
-          audiosamplerate: config.sampleRate,
+          audiodatarate: (encoderConfig.bitrate ?? 0) / 1000,
+          stereo: encoderConfig.numberOfChannels === 2,
+          audiosamplerate: encoderConfig.sampleRate,
         });
       }
 
