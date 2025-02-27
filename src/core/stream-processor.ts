@@ -26,32 +26,27 @@ export class StreamProcessor {
   #audioConfigReady: boolean = false;
   #videoConfigReady: boolean = false;
 
-  /**
-   * 创建FlvStreamer的实例。
-   * @param writable - 用于写入FLV数据的可写流。
-   * @param options - FLV流的配置选项。
-   */
   private constructor() {
     this.#eventBus = EventBus.getInstance();
 
     this.#initListeners();
   }
 
-  #initListeners() {
+  #initListeners(): void {
     this.#eventBus.on("TRACK_CHUNK", (chunk) => {
       this.handleTrackChunk(chunk as TrackChunk);
     });
   }
 
-  setAudioConfigReady() {
+  setAudioConfigReady(): void {
     this.#audioConfigReady = true;
   }
 
-  setVideoConfigReady() {
+  setVideoConfigReady(): void {
     this.#videoConfigReady = true;
   }
 
-  static getInstance() {
+  static getInstance(): StreamProcessor {
     if (!this.instance) {
       this.instance = new this();
     }
@@ -59,7 +54,7 @@ export class StreamProcessor {
     return this.instance;
   }
 
-  addTrackChunk(type: "audio" | "video", chunk: VideoFrame | AudioData) {
+  addTrackChunk(type: "audio" | "video", chunk: VideoFrame | AudioData): void {
     if (this.state !== "recording") {
       chunk.close();
       return;
@@ -72,15 +67,15 @@ export class StreamProcessor {
     }
   }
 
-  addAudioTrack(track: AudioEncoderTrack) {
+  addAudioTrack(track: AudioEncoderTrack): void {
     this.#audioEncoderTrack = track;
   }
 
-  addVideoTrack(track: VideoEncoderTrack) {
+  addVideoTrack(track: VideoEncoderTrack): void {
     this.#videoEncoderTrack = track;
   }
 
-  handleTrackChunk(chunk: TrackChunk) {
+  handleTrackChunk(chunk: TrackChunk): void {
     // 如果只有单个轨道，则发出该数据块
     if (!this.#audioEncoderTrack || !this.#videoEncoderTrack) {
       this.#publishChunk(chunk);
@@ -118,7 +113,7 @@ export class StreamProcessor {
     }
   }
 
-  start() {
+  start(): void {
     if (this.state !== "inactive") {
       return;
     }
@@ -136,7 +131,7 @@ export class StreamProcessor {
     this.state = "paused";
   }
 
-  resume() {
+  resume(): void {
     if (this.state !== "paused") {
       return;
     }
@@ -149,17 +144,26 @@ export class StreamProcessor {
     await this.#videoEncoderTrack?.flush();
   }
 
-  async stop() {
+  async stop(): Promise<void> {
     if (this.state !== "recording") {
       return;
     }
 
     await this.flush();
 
+    this.reset();
+
     this.state = "inactive";
   }
 
-  #processAudioChunk(chunk: TrackChunk) {
+  reset(): void {
+    this.#videoEncoderTrack?.reset();
+    this.#audioEncoderTrack?.reset();
+    this.#audioConfigReady = false;
+    this.#videoConfigReady = false;
+  }
+
+  #processAudioChunk(chunk: TrackChunk): void {
     const audioTrack = this.#audioEncoderTrack!;
     const videoTrack = this.#videoEncoderTrack!;
 
@@ -182,7 +186,7 @@ export class StreamProcessor {
     }
   }
 
-  #processVideoChunk(chunk: TrackChunk) {
+  #processVideoChunk(chunk: TrackChunk): void {
     const audioTrack = this.#audioEncoderTrack!;
     const videoTrack = this.#videoEncoderTrack!;
 
@@ -205,7 +209,7 @@ export class StreamProcessor {
     }
   }
 
-  #publishChunk(chunk: TrackChunk | undefined) {
+  #publishChunk(chunk: TrackChunk | undefined): void {
     if (!chunk) return;
     this.#eventBus.emit("CHUNK_PUBLISH", chunk);
   }

@@ -12,6 +12,8 @@ async function getDisplayMedia() {
   });
 }
 
+let stream;
+
 let recordingChunks = [];
 
 const myWorker = new Worker("./worker.js");
@@ -23,7 +25,7 @@ async function startRecording() {
 
   myWorker.postMessage({ type: "START" });
 
-  const stream = await getDisplayMedia();
+  stream = await getDisplayMedia();
 
   const videoTrack = stream.getVideoTracks()[0];
   const audioTrack = stream.getAudioTracks()[0];
@@ -81,6 +83,10 @@ async function stopRecording() {
   try {
     myWorker.postMessage({ type: "STOP" });
 
+    stream.getTracks().forEach((track) => {
+      track.stop();
+    });
+
     // Save the file
     const fileHandle = await window.showSaveFilePicker({
       suggestedName: "recording.flv",
@@ -95,6 +101,8 @@ async function stopRecording() {
     const writableFileStream = await fileHandle.createWritable();
     await writableFileStream.write(new Blob(recordingChunks));
     await writableFileStream.close();
+
+    recordingChunks = [];
   } catch (error) {
     console.error("Error stopping recording:", error);
   }

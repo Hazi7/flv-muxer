@@ -3,29 +3,15 @@ import { EventBus } from "./event-bus";
 import type { MuxerMode } from "./flv-muxer";
 import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
-/**
- * 表示编码后的媒体数据块，可以是音频或视频数据块
- */
 type EncodedMediaChunk = EncodedAudioChunk | EncodedVideoChunk;
 
-/**
- * 表示编码后的媒体数据块的元数据，可以是音频或视频数据块的元数据
- */
 type MediaDecoderConfig = AudioDecoderConfig | VideoDecoderConfig;
 
-/**
- * 单例类，用于管理轨道状态
- */
 class TrackState {
   static #instance: TrackState;
 
   baseTimestamp: number = 0;
 
-  /**
-   * 获取 TrackState 的单例实例
-   *
-   * @returns TrackState 的单例实例
-   */
   static getInstance() {
     if (!this.#instance) {
       this.#instance = new this();
@@ -35,9 +21,6 @@ class TrackState {
   }
 }
 
-/**
- * 抽象基类，用于处理编码轨道
- */
 export abstract class BaseEncoderTrack {
   readonly eventBus: EventBus;
   readonly queue: TrackChunk[] = [];
@@ -79,11 +62,6 @@ export abstract class BaseEncoderTrack {
     }
   }
 
-  /**
-   * 构造函数
-   * @param track 媒体流轨道
-   * @param config 编码器配置
-   */
   constructor(config: VideoEncoderConfig | AudioEncoderConfig) {
     this.eventBus = EventBus.getInstance();
     this.trackState = TrackState.getInstance();
@@ -94,20 +72,11 @@ export abstract class BaseEncoderTrack {
 
   abstract addTrackChunk(chunk: VideoFrame | AudioData): void;
 
-  /**
-   * 处理编码输出
-   * @param chunk 编码后的媒体数据块
-   * @param metadata 编码后的媒体数据块的元数据
-   */
   protected abstract handleOutput(
     chunk: EncodedMediaChunk,
     metadata?: EncodedAudioChunkMetadata | EncodedVideoChunkMetadata
   ): void;
 
-  /**
-   * 初始化编码器
-   * @param config 编码器配置
-   */
   protected abstract initEncoder(
     config: VideoEncoderConfig | AudioEncoderConfig
   ): void;
@@ -132,10 +101,6 @@ export abstract class BaseEncoderTrack {
     return this.queue.length;
   }
 
-  /**
-   * 关闭编码轨道
-   * @returns Promise<void>
-   */
   close(): void {
     if (this.state !== "recording") {
       throw new Error("Cannot stop track as it is not currently recording.");
@@ -148,10 +113,14 @@ export abstract class BaseEncoderTrack {
     this.encoder.close();
   }
 
-  /**
-   * 停止编码轨道
-   * @returns Promise<void>
-   */
+  reset(): void {
+    if (this.trackState.baseTimestamp !== 0) {
+      this.trackState.baseTimestamp = 0;
+    }
+
+    this._decoderConfig = undefined;
+  }
+
   async flush(): Promise<void> {
     if (!this.encoder) {
       throw new Error("Encoder is not initialized.");
@@ -160,11 +129,6 @@ export abstract class BaseEncoderTrack {
     return this.encoder.flush();
   }
 
-  /**
-   * 计算相对时间戳
-   * @param timestamp 时间戳
-   * @returns 相对时间戳
-   */
   protected calculateTimestamp(timestamp: number) {
     if (!this.trackState.baseTimestamp) {
       this.trackState.baseTimestamp = timestamp;
@@ -174,27 +138,16 @@ export abstract class BaseEncoderTrack {
   }
 }
 
-/**
- * 视频编码轨道类，继承自 BaseEncoderTrack
- */
 export class VideoEncoderTrack extends BaseEncoderTrack {
-  private frameCount: number = 0;
-  private keyframeInterval: number = 90;
+  #frameCount: number = 0;
+  #keyframeInterval: number = 90;
 
-  /**
-   * 构造函数
-   * @param config 视频编码器配置
-   */
   constructor(config: VideoEncoderConfig, keyframeInterval: number) {
     super(config);
 
-    this.keyframeInterval = keyframeInterval;
+    this.#keyframeInterval = keyframeInterval;
   }
 
-  /**
-   * 初始化视频编码器
-   * @param config 视频编码器配置
-   */
   protected initEncoder(config: VideoEncoderConfig): void {
     this.encoder = new VideoEncoder({
       output: this.handleOutput.bind(this),
@@ -217,22 +170,15 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
       throw new Error("Encoder is not initialized.");
     }
 
-    if (this.encoder.encodeQueueSize < 2) {
-      this.frameCount++;
+    this.encoder.encode(frame as VideoFrame & AudioData, {
+      keyFrame: this.#frameCount % this.#keyframeInterval === 0,
+    });
 
-      this.encoder.encode(frame as VideoFrame & AudioData, {
-        keyFrame: this.frameCount % this.keyframeInterval === 0,
-      });
-    }
+    this.#frameCount++;
 
     frame.close();
   }
 
-  /**
-   * 处理视频编码输出
-   * @param chunk 编码后的视频数据块
-   * @param metadata 编码后的视频数据块的元数据
-   */
   protected handleOutput(
     chunk: EncodedVideoChunk,
     metadata?: EncodedVideoChunkMetadata
@@ -255,21 +201,20 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
         timestamp,
         isKey: chunk.type === "key",
       });
+
       this.lastTimestamp = timestamp;
     } catch (error) {
       Logger.error(`Failed to handle video chunk: ${error}`);
     }
   }
+
+  reset(): void {
+    super.reset();
+    this.#frameCount = 0;
+  }
 }
 
-/**
- * 音频编码轨道类，继承自 BaseEncoderTrack
- */
 export class AudioEncoderTrack extends BaseEncoderTrack {
-  /**
-   * 初始化音频编码器
-   * @param config 音频编码器配置
-   */
   protected initEncoder(config: AudioEncoderConfig): void {
     this.encoder = new AudioEncoder({
       output: this.handleOutput.bind(this),
@@ -292,18 +237,11 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
       throw new Error("Encoder is not initialized.");
     }
 
-    if (this.encoder.encodeQueueSize < 2) {
-      this.encoder.encode(chunk as VideoFrame & AudioData);
-    }
+    this.encoder.encode(chunk as VideoFrame & AudioData);
 
     chunk.close();
   }
 
-  /**
-   * 处理音频编码输出
-   * @param chunk 编码后的音频数据块
-   * @param metadata 编码后的音频数据块的元数据
-   */
   protected handleOutput(
     chunk: EncodedMediaChunk,
     metadata?: EncodedAudioChunkMetadata
@@ -326,6 +264,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
         timestamp,
         isKey: chunk.type === "key",
       });
+
       this.lastTimestamp = timestamp;
     } catch (error) {
       Logger.error(`Failed to handle audio chunk: ${error}`);

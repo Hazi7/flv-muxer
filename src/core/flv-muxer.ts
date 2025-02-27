@@ -5,7 +5,6 @@ import {
   AVCSEStrategy,
   AVCNALUStrategy,
 } from "../strategies/mux-strategy";
-import { Logger } from "../utils/logger";
 import { AudioEncoderTrack, VideoEncoderTrack } from "./encoder-track";
 import { EventBus } from "./event-bus";
 import { FlvEncoder } from "./flv-encoder";
@@ -13,25 +12,22 @@ import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
 export type MuxerMode = "record" | "live";
 
-export interface VideoOptions {
+interface VideoOptions {
   encoderConfig: VideoEncoderConfig;
   keyframeInterval: number;
 }
 
-export interface AudioOptions {
+interface AudioOptions {
   encoderConfig: AudioEncoderConfig;
 }
 
-export interface MuxerOptions {
+interface MuxerOptions {
   mode: MuxerMode;
   chunked: boolean;
   video?: VideoOptions;
   audio?: AudioOptions;
 }
 
-/**
- * FLV 多路复用器类
- */
 export class FlvMuxer {
   readonly #encoder: FlvEncoder;
   readonly #eventBus: EventBus;
@@ -49,10 +45,6 @@ export class FlvMuxer {
     return this.#streamProcessor.state;
   }
 
-  /**
-   * 构造函数
-   * @param writable - 输出的可写流
-   */
   constructor(
     writable: WritableStream,
     options: {
@@ -76,21 +68,18 @@ export class FlvMuxer {
     this.#initStrategies();
   }
 
-  /**
-   * 初始化多路复用策略
-   */
-  #initStrategies() {
+  #initStrategies(): void {
     this.#strategies["AAC_SE"] = new AACSEStrategy();
     this.#strategies["AVC_SE"] = new AVCSEStrategy();
     this.#strategies["AAC_RAW"] = new AACRawStrategy();
     this.#strategies["AVC_NALU"] = new AVCNALUStrategy();
   }
 
-  addRawChunk(type: "audio" | "video", chunk: VideoFrame | AudioData) {
+  addRawChunk(type: "audio" | "video", chunk: VideoFrame | AudioData): void {
     this.#streamProcessor.addTrackChunk(type, chunk);
   }
 
-  configureAudio(options: AudioOptions) {
+  configureAudio(options: AudioOptions): void {
     if (!options.encoderConfig) {
       throw new Error("Audio encoder configuration cannot be empty");
     }
@@ -102,7 +91,7 @@ export class FlvMuxer {
     );
   }
 
-  configureVideo(options: VideoOptions) {
+  configureVideo(options: VideoOptions): void {
     if (!options.encoderConfig) {
       throw new Error("Video encoder configuration cannot be empty");
     }
@@ -114,10 +103,7 @@ export class FlvMuxer {
     );
   }
 
-  /**
-   * 启动多路复用器
-   */
-  async start() {
+  async start(): Promise<void> {
     if (!this.#options?.audio && !this.#options?.video) {
       throw new Error(
         "Muxer is not configured with audio or video tracks. Please call configureAudio() or configureVideo() first."
@@ -136,44 +122,32 @@ export class FlvMuxer {
 
       return this.#sourceStream
         .pipeThrough(this.#muxStream)
-        .pipeTo(this.#outputStream);
+        .pipeTo(this.#outputStream, {
+          preventClose: true,
+        });
     } catch (error) {
       throw new Error(`Error starting Muxer: ${error}`);
     }
   }
 
-  pause() {
+  pause(): Promise<void> {
     return this.#streamProcessor.pause();
   }
 
-  /**
-   * 恢复多路复用器
-   */
-  resume() {
+  resume(): void {
     this.#streamProcessor.resume();
   }
 
-  /**
-   * 停止多路复用器
-   */
-  stop() {
-    try {
-      this.#sourceStreamController?.close();
-
-      if (this.#readableHandler) {
-        this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
-      }
-
-      return this.#streamProcessor.stop();
-    } catch (error) {
-      Logger.error(`Error stopping Muxer: ${error}`);
+  stop(): Promise<void> {
+    if (this.#readableHandler) {
+      this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
     }
+
+    this.#sourceStreamController?.close();
+    return this.#streamProcessor.stop();
   }
 
-  /**
-   * 初始化源流
-   */
-  #initSourceStream() {
+  #initSourceStream(): void {
     this.#sourceStream = new ReadableStream({
       start: (controller) => {
         this.#sourceStreamController = controller;
@@ -186,10 +160,7 @@ export class FlvMuxer {
     });
   }
 
-  /**
-   * 初始化多路复用流（将 TrackChunk 转换为 FLV 包）
-   */
-  #initMuxStream() {
+  #initMuxStream(): void {
     this.#muxStream = new TransformStream({
       start: async (controller) => {
         const header = this.#encoder.encodeFlvHeader(
@@ -210,51 +181,40 @@ export class FlvMuxer {
     });
   }
 
-  /**
-   * 将元数据写入FLV流。
-   */
-  #encodeMetadata() {
-    try {
-      const metadata: Record<string, unknown> = {
-        duration: 0,
-        encoder: "flv-muxer.js",
-      };
+  #encodeMetadata(): Uint8Array {
+    const metadata: Record<string, unknown> = {
+      duration: 0,
+      encoder: "flv-muxer.js",
+    };
 
-      if (this.#options.video) {
-        const { encoderConfig } = this.#options.video;
+    if (this.#options.video) {
+      const { encoderConfig } = this.#options.video;
 
-        Object.assign(metadata, {
-          videocodecid: 7,
-          width: encoderConfig.width,
-          height: encoderConfig.height,
-          framerate: encoderConfig.framerate,
-        });
-      }
-
-      if (this.#options.audio) {
-        const { encoderConfig } = this.#options.audio;
-
-        Object.assign(metadata, {
-          audiocodecid: 10,
-          audiodatarate: (encoderConfig.bitrate ?? 0) / 1000,
-          stereo: encoderConfig.numberOfChannels === 2,
-          audiosamplerate: encoderConfig.sampleRate,
-        });
-      }
-
-      const scriptData = this.#encoder.encodeScriptDataTag(metadata);
-
-      return scriptData;
-    } catch (error) {
-      Logger.error(`Failed to write metadata: ${error}`);
+      Object.assign(metadata, {
+        videocodecid: 7,
+        width: encoderConfig.width,
+        height: encoderConfig.height,
+        framerate: encoderConfig.framerate,
+      });
     }
+
+    if (this.#options.audio) {
+      const { encoderConfig } = this.#options.audio;
+
+      Object.assign(metadata, {
+        audiocodecid: 10,
+        audiodatarate: (encoderConfig.bitrate ?? 0) / 1000,
+        stereo: encoderConfig.numberOfChannels === 2,
+        audiosamplerate: encoderConfig.sampleRate,
+      });
+    }
+
+    const scriptData = this.#encoder.encodeScriptDataTag(metadata);
+
+    return scriptData;
   }
 
-  /**
-   * 处理数据块
-   * @param chunk - 数据块
-   */
-  #muxChunk(chunk: TrackChunk) {
+  #muxChunk(chunk: TrackChunk): Uint8Array | undefined {
     if (!chunk) return;
 
     const strategy = this.#strategies[chunk.type];

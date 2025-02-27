@@ -19,7 +19,6 @@ export class EventBus {
     return this.#instance;
   }
 
-  // 订阅事件
   on(eventName: string, handler: EventHandler): void {
     if (!this.#events.has(eventName)) {
       this.#events.set(eventName, []);
@@ -27,7 +26,6 @@ export class EventBus {
     this.#events.get(eventName)!.push(handler);
   }
 
-  // 取消订阅
   off(eventName: string, handler: EventHandler): void {
     if (!this.#events.has(eventName)) return;
 
@@ -42,7 +40,6 @@ export class EventBus {
     }
   }
 
-  // 一次性订阅
   once(eventName: string, handler: EventHandler): void {
     const onceHandler = (...args: unknown[]) => {
       handler(...args);
@@ -51,7 +48,6 @@ export class EventBus {
     this.on(eventName, onceHandler);
   }
 
-  // 触发事件
   emit(eventName: string, ...args: unknown[]): void {
     if (!this.#events.has(eventName)) return;
 
@@ -65,7 +61,6 @@ export class EventBus {
     });
   }
 
-  // 清除所有事件监听
   clear(): void {
     this.#events.clear();
   }

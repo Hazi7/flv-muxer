@@ -8,20 +8,12 @@ export class ScriptEncoder {
     this.writer = new BinaryWriter();
   }
 
-  /**
-   * 将 Date 对象以 AMF 格式写入二进制流。
-   * @param date - 要写入的 Date 对象。
-   */
-  writeScriptDataDate(date: Date) {
+  writeScriptDataDate(date: Date): void {
     this.writer.writeFloat64(date.getTime());
     this.writer.writeUint16(0); // 时区，默认为0
   }
 
-  /**
-   * 将 ECMA 数组以 AMF 格式写入二进制流。
-   * @param obj - 表示 ECMA 数组的对象。
-   */
-  writeScriptDataEcmaArray(obj: Record<string, unknown>) {
+  writeScriptDataEcmaArray(obj: Record<string, unknown>): void {
     this.writer.writeUint32(Object.keys(obj).length); // 数组长度
 
     for (const [key, value] of Object.entries(obj)) {
@@ -31,21 +23,13 @@ export class ScriptEncoder {
     this.writeScriptDataObjectEnd();
   }
 
-  /**
-   * 将长字符串以 AMF 格式写入二进制流。
-   * @param str - 要写入的字符串。
-   */
-  writeScriptDataLongString(str: string) {
+  writeScriptDataLongString(str: string): void {
     const strBytes = new TextEncoder().encode(str);
     this.writer.writeUint32(strBytes.length);
     this.writer.writeBytes(strBytes);
   }
 
-  /**
-   * 将对象以 AMF 格式写入二进制流。
-   * @param objs - 要写入的对象。
-   */
-  writeScriptDataObject(objs: Record<string, unknown>) {
+  writeScriptDataObject(objs: Record<string, unknown>): void {
     for (const [key, value] of Object.entries(objs)) {
       this.writeScriptDataObjectProperty(key, value);
     }
@@ -53,41 +37,25 @@ export class ScriptEncoder {
     this.writeScriptDataObjectEnd();
   }
 
-  /**
-   * 将对象的结束标记以 AMF 格式写入二进制流。
-   */
-  writeScriptDataObjectEnd() {
+  writeScriptDataObjectEnd(): void {
     this.writer.writeUint8(0x00);
     this.writer.writeUint8(0x00);
     this.writer.writeUint8(0x09);
   }
 
-  /**
-   * 将对象的属性以 AMF 格式写入二进制流。
-   * @param key - 属性的键。
-   * @param value - 属性的值。
-   */
-  writeScriptDataObjectProperty(key: string, value: unknown) {
+  writeScriptDataObjectProperty(key: string, value: unknown): void {
     this.writeScriptDataString(key);
     this.writeScriptDataValue(value);
   }
 
-  /**
-   * 将严格数组以 AMF 格式写入二进制流。
-   * @param arr - 要写入的数组。
-   */
-  writeScriptDataStrictArray(arr: unknown[]) {
+  writeScriptDataStrictArray(arr: unknown[]): void {
     this.writer.writeUint32(arr.length);
     for (const value of arr) {
       this.writeScriptDataValue(value);
     }
   }
 
-  /**
-   * 将字符串以 AMF 格式写入二进制流。
-   * @param str - 要写入的字符串。
-   */
-  writeScriptDataString(str: string) {
+  writeScriptDataString(str: string): void {
     const encoder = new TextEncoder();
     const strBytes = encoder.encode(str);
 
@@ -95,11 +63,7 @@ export class ScriptEncoder {
     this.writer.writeBytes(strBytes);
   }
 
-  /**
-   * 将值以 AMF 格式写入二进制流。
-   * @param value - 要写入的值。
-   */
-  writeScriptDataValue(value: unknown) {
+  writeScriptDataValue(value: unknown): void {
     if (value === null) {
       this.writer.writeUint8(AmfType.NULL);
     } else if (value === undefined) {
