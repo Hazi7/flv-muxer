@@ -13,19 +13,19 @@ export class BinaryWriter {
     this.#littleEndian = littleEndian;
   }
 
-  writeUint8(value: number) {
+  writeUint8(value: number): void {
     this.ensureAvailable(1);
     this.#buffer[this.#position++] = value;
   }
 
-  writeUint16(value: number) {
+  writeUint16(value: number): void {
     this.ensureAvailable(2);
 
     this.#view.setUint16(this.#position, value, this.#littleEndian);
     this.#position += 2;
   }
 
-  writeUint24(value: number) {
+  writeUint24(value: number): void {
     this.ensureAvailable(3);
     if (this.#littleEndian) {
       this.#buffer[this.#position++] = value & 0xff;
@@ -38,7 +38,7 @@ export class BinaryWriter {
     }
   }
 
-  writeUint32(value: number) {
+  writeUint32(value: number): void {
     this.ensureAvailable(4);
     this.#view.setUint32(this.#position, value, this.#littleEndian);
     this.#position += 4;
@@ -73,13 +73,13 @@ export class BinaryWriter {
     this.#position += 8;
   }
 
-  writeBytes(bytes: Uint8Array) {
+  writeBytes(bytes: Uint8Array): void {
     this.ensureAvailable(bytes.byteLength);
     this.#buffer.set(bytes, this.#position);
     this.#position += bytes.byteLength;
   }
 
-  writeString(str: string) {
+  writeString(str: string): void {
     const encoder = new TextEncoder();
     const encodedStr = encoder.encode(str);
 
@@ -88,26 +88,29 @@ export class BinaryWriter {
     this.#position += encodedStr.byteLength;
   }
 
-  getBytes() {
-    return this.#buffer.slice(0, this.#position);
+  getBytes(): Uint8Array {
+    const result = new Uint8Array(this.#position);
+    result.set(this.#buffer.subarray(0, this.#position));
+
+    return result;
   }
 
-  getPosition() {
+  getPosition(): number {
     return this.#position;
   }
 
-  reset() {
+  reset(): void {
     this.#position = 0;
   }
 
-  seek(position: number) {
+  seek(position: number): void {
     if (position < 0 || position > this.#buffer.byteLength) {
       throw new Error("非法的位置");
     }
     this.#position = position;
   }
 
-  private ensureAvailable(bytes: number) {
+  private ensureAvailable(bytes: number): void {
     const requiredSize = bytes + this.#position;
     if (requiredSize <= this.#buffer.byteLength) {
       return;
