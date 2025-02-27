@@ -4,6 +4,8 @@ import {
 } from "./encoder-track";
 import { EventBus } from "./event-bus";
 
+export type ProcessorState = "recording" | "paused" | "inactive";
+
 export interface TrackChunk {
   type: "AAC_RAW" | "AAC_SE" | "AVC_SE" | "AVC_NALU";
   data: Uint8Array;
@@ -15,10 +17,12 @@ export interface TrackChunk {
 
 export class StreamProcessor {
   static instance: StreamProcessor;
+
+  state: ProcessorState = "inactive";
+
   #eventBus: EventBus;
-  audioEncoderTrack: AudioEncoderTrack | undefined;
-  videoEncoderTrack: VideoEncoderTrack | undefined;
-  #isProcessing: boolean = false;
+  #audioEncoderTrack: AudioEncoderTrack | undefined;
+  #videoEncoderTrack: VideoEncoderTrack | undefined;
   #audioConfigReady: boolean = false;
   #videoConfigReady: boolean = false;
 
@@ -56,24 +60,29 @@ export class StreamProcessor {
   }
 
   addTrackChunk(type: "audio" | "video", chunk: VideoFrame | AudioData) {
+    if (this.state !== "recording") {
+      chunk.close();
+      return;
+    }
+
     if (type === "audio") {
-      this.audioEncoderTrack?.addTrackChunk(chunk);
+      this.#audioEncoderTrack?.addTrackChunk(chunk);
     } else if (type === "video") {
-      this.videoEncoderTrack?.addTrackChunk(chunk);
+      this.#videoEncoderTrack?.addTrackChunk(chunk);
     }
   }
 
   addAudioTrack(track: AudioEncoderTrack) {
-    this.audioEncoderTrack = track;
+    this.#audioEncoderTrack = track;
   }
 
   addVideoTrack(track: VideoEncoderTrack) {
-    this.videoEncoderTrack = track;
+    this.#videoEncoderTrack = track;
   }
 
   handleTrackChunk(chunk: TrackChunk) {
     // 如果只有单个轨道，则发出该数据块
-    if (!this.audioEncoderTrack || !this.videoEncoderTrack) {
+    if (!this.#audioEncoderTrack || !this.#videoEncoderTrack) {
       this.#publishChunk(chunk);
       return;
     }
@@ -110,62 +119,49 @@ export class StreamProcessor {
   }
 
   start() {
-    if (this.#isProcessing) {
-      throw new Error("Stream processor is already processing");
+    if (this.state !== "inactive") {
+      return;
     }
 
-    this.audioEncoderTrack?.start();
-    this.videoEncoderTrack?.start();
-
-    this.#isProcessing = true;
+    this.state = "recording";
   }
 
   async pause() {
-    if (!this.#isProcessing) {
-      throw new Error(
-        "StreamProcessor is not currently processing. Please call the 'start' method before proceeding."
-      );
+    if (this.state !== "recording") {
+      return;
     }
 
-    await this.audioEncoderTrack?.flush();
-    this.audioEncoderTrack?.stop();
+    await this.flush();
 
-    await this.videoEncoderTrack?.flush();
-    this.videoEncoderTrack?.stop();
-
-    this.#isProcessing = false;
+    this.state = "paused";
   }
 
   resume() {
-    if (this.#isProcessing) {
-      throw new Error("StreamProcessor is currently processing");
+    if (this.state !== "paused") {
+      return;
     }
 
-    this.audioEncoderTrack?.resume();
-    this.videoEncoderTrack?.resume();
+    this.state = "recording";
+  }
 
-    this.#isProcessing = true;
+  async flush(): Promise<void> {
+    await this.#audioEncoderTrack?.flush();
+    await this.#videoEncoderTrack?.flush();
   }
 
   async stop() {
-    if (!this.#isProcessing) {
-      throw new Error(
-        "StreamProcessor is not currently processing. Please call the 'start' method before proceeding."
-      );
+    if (this.state !== "recording") {
+      return;
     }
 
-    await this.audioEncoderTrack?.flush();
-    this.audioEncoderTrack?.stop();
+    await this.flush();
 
-    await this.videoEncoderTrack?.flush();
-    this.videoEncoderTrack?.stop();
-
-    this.#isProcessing = false;
+    this.state = "inactive";
   }
 
   #processAudioChunk(chunk: TrackChunk) {
-    const audioTrack = this.audioEncoderTrack!;
-    const videoTrack = this.videoEncoderTrack!;
+    const audioTrack = this.#audioEncoderTrack!;
+    const videoTrack = this.#videoEncoderTrack!;
 
     if (!this.#audioConfigReady || !this.#videoConfigReady) {
       audioTrack.enqueue(chunk);
@@ -187,8 +183,8 @@ export class StreamProcessor {
   }
 
   #processVideoChunk(chunk: TrackChunk) {
-    const audioTrack = this.audioEncoderTrack!;
-    const videoTrack = this.videoEncoderTrack!;
+    const audioTrack = this.#audioEncoderTrack!;
+    const videoTrack = this.#videoEncoderTrack!;
 
     if (!this.#audioConfigReady || !this.#videoConfigReady) {
       videoTrack.enqueue(chunk);

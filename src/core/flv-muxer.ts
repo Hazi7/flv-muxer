@@ -29,8 +29,6 @@ export interface MuxerOptions {
   audio?: AudioOptions;
 }
 
-export type MuxerState = "recording" | "paused" | "stopped";
-
 /**
  * FLV 多路复用器类
  */
@@ -45,8 +43,11 @@ export class FlvMuxer {
   #sourceStreamController: ReadableStreamDefaultController | undefined;
   #muxStream: TransformStream | undefined;
   #strategies: { [key: string]: MuxStrategy } = {};
-
   #readableHandler: undefined | ((chunk: Uint8Array) => void);
+
+  get state() {
+    return this.#streamProcessor.state;
+  }
 
   /**
    * 构造函数
@@ -133,19 +134,16 @@ export class FlvMuxer {
 
       this.#streamProcessor.start();
 
-      await this.#sourceStream
+      return this.#sourceStream
         .pipeThrough(this.#muxStream)
         .pipeTo(this.#outputStream);
-
-      // 取消流
-      this.#sourceStream?.cancel();
     } catch (error) {
       throw new Error(`Error starting Muxer: ${error}`);
     }
   }
 
   pause() {
-    this.#streamProcessor.pause();
+    return this.#streamProcessor.pause();
   }
 
   /**
@@ -161,8 +159,12 @@ export class FlvMuxer {
   stop() {
     try {
       this.#sourceStreamController?.close();
-      this.#streamProcessor.stop();
-      this.#cleanup();
+
+      if (this.#readableHandler) {
+        this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
+      }
+
+      return this.#streamProcessor.stop();
     } catch (error) {
       Logger.error(`Error stopping Muxer: ${error}`);
     }
@@ -180,9 +182,6 @@ export class FlvMuxer {
         };
 
         this.#eventBus.on("CHUNK_PUBLISH", this.#readableHandler);
-      },
-      cancel: () => {
-        this.#cleanup();
       },
     });
   }
@@ -209,15 +208,6 @@ export class FlvMuxer {
         this.#muxStream = undefined;
       },
     });
-  }
-
-  #cleanup() {
-    if (this.#readableHandler) {
-      this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
-    }
-
-    this.#readableHandler = undefined;
-    this.#sourceStream = undefined;
   }
 
   /**

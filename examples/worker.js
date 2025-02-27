@@ -36,20 +36,26 @@ flvMuxer.configureVideo({
   keyframeInterval: 90,
 });
 
-flvMuxer.configureAudio({
-  encoderConfig: {
-    codec: "mp4a.40.29",
-    sampleRate: 44100,
-    numberOfChannels: 2,
-  },
-});
+// flvMuxer.configureAudio({
+//   encoderConfig: {
+//     codec: "mp4a.40.29",
+//     sampleRate: 44100,
+//     numberOfChannels: 2,
+//   },
+// });
 
-flvMuxer.start();
-
-self.onmessage = (e) => {
-  if (e.data.type === "video") {
+self.onmessage = async (e) => {
+  if (e.data.type === "DATA_VIDEO") {
     flvMuxer.addRawChunk("video", e.data.chunk);
-  } else {
+  } else if (e.data.type == "DATA_AUDIO") {
     flvMuxer.addRawChunk("audio", e.data.chunk);
+  } else if (e.data.type === "START") {
+    flvMuxer.start();
+  } else if (e.data.type === "PAUSE") {
+    await flvMuxer.pause();
+  } else if (e.data.type === "RESUME") {
+    flvMuxer.resume();
+  } else if (e.data.type === "STOP") {
+    await flvMuxer.stop();
   }
 };

@@ -1,7 +1,7 @@
 import { Logger } from "../utils/logger";
 import { EventBus } from "./event-bus";
-import type { MuxerMode, MuxerState } from "./flv-muxer";
-import { type TrackChunk } from "./stream-processor";
+import type { MuxerMode } from "./flv-muxer";
+import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
 /**
  * 表示编码后的媒体数据块，可以是音频或视频数据块
@@ -46,13 +46,16 @@ export abstract class BaseEncoderTrack {
 
   encoder: VideoEncoder | AudioEncoder | undefined;
   trackState: TrackState;
-  muxerState: MuxerState = "stopped";
   lastTimestamp: number = 0;
 
   private _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
 
   get decoderConfig(): VideoDecoderConfig | undefined {
     return this._decoderConfig;
+  }
+
+  get state() {
+    return StreamProcessor.getInstance().state;
   }
 
   set decoderConfig(config: MediaDecoderConfig) {
@@ -130,39 +133,11 @@ export abstract class BaseEncoderTrack {
   }
 
   /**
-   * 启动编码轨道
-   * @returns Promise<void>
-   */
-  start() {
-    if (this.muxerState !== "stopped") {
-      throw new Error("Cannot start track as it is not in stopped state.");
-    }
-
-    this.muxerState = "recording";
-  }
-
-  pause() {
-    if (this.muxerState !== "recording") {
-      throw new Error("Cannot pause track as it is not currently recording.");
-    }
-
-    this.muxerState = "paused";
-  }
-
-  resume() {
-    if (this.muxerState !== "paused") {
-      throw new Error("Cannot resume track as it is not currently paused.");
-    }
-
-    this.muxerState = "recording";
-  }
-
-  /**
    * 关闭编码轨道
    * @returns Promise<void>
    */
-  stop(): void {
-    if (this.muxerState !== "recording") {
+  close(): void {
+    if (this.state !== "recording") {
       throw new Error("Cannot stop track as it is not currently recording.");
     }
 
@@ -170,7 +145,6 @@ export abstract class BaseEncoderTrack {
       throw new Error("Encoder is not initialized.");
     }
 
-    this.muxerState = "stopped";
     this.encoder.close();
   }
 
@@ -234,7 +208,7 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
   }
 
   addTrackChunk(frame: VideoFrame | AudioData): void {
-    if (this.muxerState !== "recording") {
+    if (this.state !== "recording") {
       frame.close();
       return;
     }
@@ -309,7 +283,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
   }
 
   addTrackChunk(chunk: VideoFrame | AudioData): void {
-    if (this.muxerState !== "recording") {
+    if (this.state !== "recording") {
       chunk.close();
       return;
     }

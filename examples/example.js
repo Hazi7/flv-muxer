@@ -14,12 +14,14 @@ async function getDisplayMedia() {
 
 let recordingChunks = [];
 
-async function startRecording() {
-  const myWorker = new Worker("./worker.js");
+const myWorker = new Worker("./worker.js");
 
+async function startRecording() {
   myWorker.onmessage = (chunk) => {
     recordingChunks.push(chunk.data);
   };
+
+  myWorker.postMessage({ type: "START" });
 
   const stream = await getDisplayMedia();
 
@@ -36,7 +38,7 @@ async function startRecording() {
         write: (chunk) => {
           myWorker.postMessage(
             {
-              type: "video",
+              type: "DATA_VIDEO",
               chunk,
             },
             [chunk]
@@ -56,7 +58,7 @@ async function startRecording() {
         write: (chunk) => {
           myWorker.postMessage(
             {
-              type: "audio",
+              type: "DATA_AUDIO",
               chunk,
             },
             [chunk]
@@ -67,12 +69,18 @@ async function startRecording() {
   }
 }
 
-function pauseRecording() {}
+function pauseRecording() {
+  myWorker.postMessage({ type: "PAUSE" });
+}
 
-function resumeRecording() {}
+function resumeRecording() {
+  myWorker.postMessage({ type: "RESUME" });
+}
 
 async function stopRecording() {
   try {
+    myWorker.postMessage({ type: "STOP" });
+
     // Save the file
     const fileHandle = await window.showSaveFilePicker({
       suggestedName: "recording.flv",
