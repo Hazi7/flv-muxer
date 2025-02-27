@@ -13,16 +13,20 @@ import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
 export type MuxerMode = "record" | "live";
 
+export interface VideoOptions {
+  encoderConfig: VideoEncoderConfig;
+  keyframeInterval: number;
+}
+
+export interface AudioOptions {
+  encoderConfig: AudioEncoderConfig;
+}
+
 export interface MuxerOptions {
   mode: MuxerMode;
   chunked: boolean;
-  video?: {
-    encoderConfig: VideoEncoderConfig;
-    keyframeInterval: number;
-  };
-  audio?: {
-    encoderConfig: AudioEncoderConfig;
-  };
+  video?: VideoOptions;
+  audio?: AudioOptions;
 }
 
 export type MuxerState = "recording" | "paused" | "stopped";
@@ -34,12 +38,12 @@ export class FlvMuxer {
   readonly #encoder: FlvEncoder;
   readonly #eventBus: EventBus;
   readonly #streamProcessor: StreamProcessor;
+  readonly #outputStream: WritableStream | undefined;
 
-  #options: MuxerOptions | undefined;
+  #options: MuxerOptions;
   #sourceStream: ReadableStream | undefined;
   #sourceStreamController: ReadableStreamDefaultController | undefined;
   #muxStream: TransformStream | undefined;
-  #outputStream: WritableStream | undefined;
   #strategies: { [key: string]: MuxStrategy } = {};
 
   #readableHandler: undefined | ((chunk: Uint8Array) => void);
@@ -48,12 +52,24 @@ export class FlvMuxer {
    * 构造函数
    * @param writable - 输出的可写流
    */
-  constructor(writable: WritableStream) {
+  constructor(
+    writable: WritableStream,
+    options: {
+      mode: MuxerMode;
+      chunked: boolean;
+    }
+  ) {
+    if (!(writable instanceof WritableStream)) {
+      throw new Error(
+        "The provided 'writable' is not an instance of WritableStream."
+      );
+    }
+
     this.#encoder = new FlvEncoder();
     this.#eventBus = EventBus.getInstance();
     this.#streamProcessor = StreamProcessor.getInstance();
-
     this.#outputStream = writable;
+    this.#options = options;
 
     // 初始化策略
     this.#initStrategies();
@@ -69,46 +85,42 @@ export class FlvMuxer {
     this.#strategies["AVC_NALU"] = new AVCNALUStrategy();
   }
 
-  addChunk(type: "audio" | "video", chunk: VideoFrame | AudioData) {
-    if (type === "audio") {
-      this.#streamProcessor.addTrackChunk(type, chunk);
-    }
+  addRawChunk(type: "audio" | "video", chunk: VideoFrame | AudioData) {
+    this.#streamProcessor.addTrackChunk(type, chunk);
   }
 
-  /**
-   * 配置多路复用器选项
-   * @param options - 多路复用器选项
-   */
-  configure(options: MuxerOptions) {
-    this.#options = options;
-
-    if (options.audio) {
-      const { encoderConfig: audioConfig } = options.audio;
-
-      if (audioConfig) {
-        this.#streamProcessor.addAudioTrack(
-          new AudioEncoderTrack(audioConfig, options.mode)
-        );
-      }
+  configureAudio(options: AudioOptions) {
+    if (!options.encoderConfig) {
+      throw new Error("Audio encoder configuration cannot be empty");
     }
 
-    if (options.video) {
-      const { encoderConfig: videoConfig, keyframeInterval } = options.video;
+    this.#options.audio = options;
 
-      if (videoConfig) {
-        this.#streamProcessor.addVideoTrack(
-          new VideoEncoderTrack(videoConfig, options.mode, keyframeInterval)
-        );
-      }
+    this.#streamProcessor.addAudioTrack(
+      new AudioEncoderTrack(options.encoderConfig)
+    );
+  }
+
+  configureVideo(options: VideoOptions) {
+    if (!options.encoderConfig) {
+      throw new Error("Video encoder configuration cannot be empty");
     }
+
+    this.#options.video = options;
+
+    this.#streamProcessor.addVideoTrack(
+      new VideoEncoderTrack(options.encoderConfig, options.keyframeInterval)
+    );
   }
 
   /**
    * 启动多路复用器
    */
   async start() {
-    if (!this.#options) {
-      throw new Error("Muxer not configured. Call configure() first.");
+    if (!this.#options?.audio && !this.#options?.video) {
+      throw new Error(
+        "Muxer is not configured with audio or video tracks. Please call configureAudio() or configureVideo() first."
+      );
     }
 
     try {
@@ -133,22 +145,14 @@ export class FlvMuxer {
   }
 
   pause() {
-    if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
-      throw new Error("Muxer is not running.");
-    }
-
-    this.#streamProcessor.stop();
+    this.#streamProcessor.pause();
   }
 
   /**
    * 恢复多路复用器
    */
   resume() {
-    if (!this.#sourceStream || !this.#muxStream || !this.#outputStream) {
-      throw new Error("Muxer is not running.");
-    }
-
-    this.#streamProcessor.start();
+    this.#streamProcessor.resume();
   }
 
   /**
@@ -156,8 +160,9 @@ export class FlvMuxer {
    */
   stop() {
     try {
-      this.#streamProcessor.close();
       this.#sourceStreamController?.close();
+      this.#streamProcessor.stop();
+      this.#cleanup();
     } catch (error) {
       Logger.error(`Error stopping Muxer: ${error}`);
     }
@@ -177,12 +182,7 @@ export class FlvMuxer {
         this.#eventBus.on("CHUNK_PUBLISH", this.#readableHandler);
       },
       cancel: () => {
-        if (this.#readableHandler) {
-          this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
-        }
-
-        this.#readableHandler = undefined;
-        this.#sourceStream = undefined;
+        this.#cleanup();
       },
     });
   }
@@ -194,8 +194,8 @@ export class FlvMuxer {
     this.#muxStream = new TransformStream({
       start: async (controller) => {
         const header = this.#encoder.encodeFlvHeader(
-          !!this.#options?.video,
-          !!this.#options?.audio
+          !!this.#options.video,
+          !!this.#options.audio
         );
         const metadata = this.#encodeMetadata();
         controller.enqueue(header);
@@ -211,6 +211,15 @@ export class FlvMuxer {
     });
   }
 
+  #cleanup() {
+    if (this.#readableHandler) {
+      this.#eventBus.off("CHUNK_PUBLISH", this.#readableHandler);
+    }
+
+    this.#readableHandler = undefined;
+    this.#sourceStream = undefined;
+  }
+
   /**
    * 将元数据写入FLV流。
    */
@@ -221,7 +230,7 @@ export class FlvMuxer {
         encoder: "flv-muxer.js",
       };
 
-      if (this.#options?.video) {
+      if (this.#options.video) {
         const { encoderConfig } = this.#options.video;
 
         Object.assign(metadata, {
@@ -232,7 +241,7 @@ export class FlvMuxer {
         });
       }
 
-      if (this.#options?.audio) {
+      if (this.#options.audio) {
         const { encoderConfig } = this.#options.audio;
 
         Object.assign(metadata, {

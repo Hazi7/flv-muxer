@@ -120,22 +120,47 @@ export class StreamProcessor {
     this.#isProcessing = true;
   }
 
-  stop() {
+  async pause() {
     if (!this.#isProcessing) {
       throw new Error(
         "StreamProcessor is not currently processing. Please call the 'start' method before proceeding."
       );
     }
 
-    this.audioEncoderTrack?.flush();
-    this.videoEncoderTrack?.flush();
+    await this.audioEncoderTrack?.flush();
+    this.audioEncoderTrack?.stop();
+
+    await this.videoEncoderTrack?.flush();
+    this.videoEncoderTrack?.stop();
 
     this.#isProcessing = false;
   }
 
-  close() {
-    this.audioEncoderTrack?.close();
-    this.videoEncoderTrack?.close();
+  resume() {
+    if (this.#isProcessing) {
+      throw new Error("StreamProcessor is currently processing");
+    }
+
+    this.audioEncoderTrack?.resume();
+    this.videoEncoderTrack?.resume();
+
+    this.#isProcessing = true;
+  }
+
+  async stop() {
+    if (!this.#isProcessing) {
+      throw new Error(
+        "StreamProcessor is not currently processing. Please call the 'start' method before proceeding."
+      );
+    }
+
+    await this.audioEncoderTrack?.flush();
+    this.audioEncoderTrack?.stop();
+
+    await this.videoEncoderTrack?.flush();
+    this.videoEncoderTrack?.stop();
+
+    this.#isProcessing = false;
   }
 
   #processAudioChunk(chunk: TrackChunk) {

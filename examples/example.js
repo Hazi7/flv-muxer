@@ -13,60 +13,65 @@ async function getDisplayMedia() {
 }
 
 let recordingChunks = [];
-let writableController;
-
-// const ws = new WebSocket("ws://localhost:9001/livestream/test");
-const writable = new WritableStream({
-  write: (chunk) => {
-    recordingChunks.push(chunk);
-    // ws.send(chunk);
-  },
-});
-
-let flvMuxer;
 
 async function startRecording() {
+  const myWorker = new Worker("./worker.js");
+
+  myWorker.onmessage = (chunk) => {
+    recordingChunks.push(chunk.data);
+  };
+
   const stream = await getDisplayMedia();
 
   const videoTrack = stream.getVideoTracks()[0];
   const audioTrack = stream.getAudioTracks()[0];
 
-  flvMuxer = new FlvMuxer(writable);
-
-  flvMuxer.configure({
-    mode: "record",
-    video: {
+  if (videoTrack) {
+    const videoTrackProcessor = new MediaStreamTrackProcessor({
       track: videoTrack,
-      config: {
-        codec: "avc1.640034",
-        width: 2560,
-        height: 1440,
-        framerate: 30,
-      },
-    },
-    audio: {
+    });
+
+    videoTrackProcessor.readable.pipeTo(
+      new WritableStream({
+        write: (chunk) => {
+          myWorker.postMessage(
+            {
+              type: "video",
+              chunk,
+            },
+            [chunk]
+          );
+        },
+      })
+    );
+  }
+
+  if (audioTrack) {
+    const audioTrackProcessor = new MediaStreamTrackProcessor({
       track: audioTrack,
-      config: {
-        codec: "mp4a.40.29",
-        sampleRate: 44100,
-        numberOfChannels: 2,
-      },
-    },
-  });
+    });
 
-  flvMuxer.start();
+    audioTrackProcessor.readable.pipeTo(
+      new WritableStream({
+        write: (chunk) => {
+          myWorker.postMessage(
+            {
+              type: "audio",
+              chunk,
+            },
+            [chunk]
+          );
+        },
+      })
+    );
+  }
 }
 
-function pauseRecording() {
-  flvMuxer.pause();
-}
+function pauseRecording() {}
 
-function resumeRecording() {
-  flvMuxer.resume();
-}
+function resumeRecording() {}
 
 async function stopRecording() {
-  flvMuxer.stop();
   try {
     // Save the file
     const fileHandle = await window.showSaveFilePicker({

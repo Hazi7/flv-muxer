@@ -41,12 +41,12 @@ class TrackState {
 export abstract class BaseEncoderTrack {
   readonly eventBus: EventBus;
   readonly queue: TrackChunk[] = [];
-  readonly mode: MuxerMode;
+  readonly mode: MuxerMode = "record";
   readonly config: VideoEncoderConfig | AudioEncoderConfig;
 
   encoder: VideoEncoder | AudioEncoder | undefined;
   trackState: TrackState;
-  muxerState: MuxerState | undefined;
+  muxerState: MuxerState = "stopped";
   lastTimestamp: number = 0;
 
   private _decoderConfig: AudioDecoderConfig | VideoDecoderConfig | undefined;
@@ -81,14 +81,10 @@ export abstract class BaseEncoderTrack {
    * @param track 媒体流轨道
    * @param config 编码器配置
    */
-  constructor(
-    config: VideoEncoderConfig | AudioEncoderConfig,
-    mode: MuxerMode
-  ) {
+  constructor(config: VideoEncoderConfig | AudioEncoderConfig) {
     this.eventBus = EventBus.getInstance();
     this.trackState = TrackState.getInstance();
     this.config = config;
-    this.mode = mode;
 
     this.initEncoder(config);
   }
@@ -129,12 +125,53 @@ export abstract class BaseEncoderTrack {
     return this.queue.length === 0;
   }
 
+  length() {
+    return this.queue.length;
+  }
+
   /**
    * 启动编码轨道
    * @returns Promise<void>
    */
   start() {
+    if (this.muxerState !== "stopped") {
+      throw new Error("Cannot start track as it is not in stopped state.");
+    }
+
     this.muxerState = "recording";
+  }
+
+  pause() {
+    if (this.muxerState !== "recording") {
+      throw new Error("Cannot pause track as it is not currently recording.");
+    }
+
+    this.muxerState = "paused";
+  }
+
+  resume() {
+    if (this.muxerState !== "paused") {
+      throw new Error("Cannot resume track as it is not currently paused.");
+    }
+
+    this.muxerState = "recording";
+  }
+
+  /**
+   * 关闭编码轨道
+   * @returns Promise<void>
+   */
+  stop(): void {
+    if (this.muxerState !== "recording") {
+      throw new Error("Cannot stop track as it is not currently recording.");
+    }
+
+    if (!this.encoder) {
+      throw new Error("Encoder is not initialized.");
+    }
+
+    this.muxerState = "stopped";
+    this.encoder.close();
   }
 
   /**
@@ -146,21 +183,7 @@ export abstract class BaseEncoderTrack {
       throw new Error("Encoder is not initialized.");
     }
 
-    this.muxerState = "paused";
     return this.encoder.flush();
-  }
-
-  /**
-   * 关闭编码轨道
-   * @returns Promise<void>
-   */
-  close(): void {
-    if (!this.encoder) {
-      throw new Error("Encoder is not initialized.");
-    }
-
-    this.muxerState = "stopped";
-    this.encoder.close();
   }
 
   /**
@@ -186,15 +209,10 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
 
   /**
    * 构造函数
-   * @param track 媒体流轨道
    * @param config 视频编码器配置
    */
-  constructor(
-    config: VideoEncoderConfig,
-    mode: MuxerMode,
-    keyframeInterval: number
-  ) {
-    super(config, mode);
+  constructor(config: VideoEncoderConfig, keyframeInterval: number) {
+    super(config);
 
     this.keyframeInterval = keyframeInterval;
   }
@@ -215,9 +233,9 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     this.encoder.configure(config);
   }
 
-  addTrackChunk(chunk: VideoFrame | AudioData): void {
+  addTrackChunk(frame: VideoFrame | AudioData): void {
     if (this.muxerState !== "recording") {
-      chunk.close();
+      frame.close();
       return;
     }
 
@@ -228,12 +246,12 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     if (this.encoder.encodeQueueSize < 2) {
       this.frameCount++;
 
-      this.encoder.encode(chunk as VideoFrame & AudioData, {
+      this.encoder.encode(frame as VideoFrame & AudioData, {
         keyFrame: this.frameCount % this.keyframeInterval === 0,
       });
     }
 
-    chunk.close();
+    frame.close();
   }
 
   /**
@@ -303,6 +321,7 @@ export class AudioEncoderTrack extends BaseEncoderTrack {
     if (this.encoder.encodeQueueSize < 2) {
       this.encoder.encode(chunk as VideoFrame & AudioData);
     }
+
     chunk.close();
   }
 
