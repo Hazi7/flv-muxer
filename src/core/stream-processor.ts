@@ -126,7 +126,7 @@ export class StreamProcessor {
       return;
     }
 
-    await this.flush();
+    await this.#flush();
 
     this.state = "paused";
   }
@@ -139,17 +139,12 @@ export class StreamProcessor {
     this.state = "recording";
   }
 
-  async flush(): Promise<void> {
-    await this.#audioEncoderTrack?.flush();
-    await this.#videoEncoderTrack?.flush();
-  }
-
   async stop(): Promise<void> {
     if (this.state !== "recording") {
       return;
     }
 
-    await this.flush();
+    await this.#flush();
 
     this.reset();
 
@@ -161,6 +156,24 @@ export class StreamProcessor {
     this.#audioEncoderTrack?.reset();
     this.#audioConfigReady = false;
     this.#videoConfigReady = false;
+  }
+
+  async #flush(): Promise<void> {
+    await this.#audioEncoderTrack?.flush();
+    await this.#videoEncoderTrack?.flush();
+
+    const audioTrack = this.#audioEncoderTrack!;
+    const videoTrack = this.#videoEncoderTrack!;
+
+    // 清空音频轨道中的剩余数据
+    while (!audioTrack.isEmpty()) {
+      this.#publishChunk(audioTrack.dequeue());
+    }
+
+    // 清空视频轨道中的剩余数据
+    while (!videoTrack.isEmpty()) {
+      this.#publishChunk(videoTrack.dequeue());
+    }
   }
 
   #processAudioChunk(chunk: TrackChunk): void {

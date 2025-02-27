@@ -23,10 +23,10 @@ class TrackState {
 
 export abstract class BaseEncoderTrack {
   readonly eventBus: EventBus;
-  readonly queue: TrackChunk[] = [];
   readonly mode: MuxerMode = "record";
   readonly config: VideoEncoderConfig | AudioEncoderConfig;
 
+  queue: TrackChunk[] = [];
   encoder: VideoEncoder | AudioEncoder | undefined;
   trackState: TrackState;
   lastTimestamp: number = 0;
@@ -93,6 +93,10 @@ export abstract class BaseEncoderTrack {
     return this.queue[0];
   }
 
+  clear(): void {
+    this.queue = [];
+  }
+
   isEmpty(): boolean {
     return this.queue.length === 0;
   }
@@ -118,6 +122,7 @@ export abstract class BaseEncoderTrack {
       this.trackState.baseTimestamp = 0;
     }
 
+    this.clear();
     this._decoderConfig = undefined;
   }
 

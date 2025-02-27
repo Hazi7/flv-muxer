@@ -1,4 +1,4 @@
-// const ws = new WebSocket("ws://localhost:9001/livestream/test");
+// const ws = new WebSocket("ws://localhost:3000/livestream/push");
 
 // ws.onopen = () => {
 //   console.log("WebSocket connection established");
@@ -15,6 +15,7 @@
 const writable = new WritableStream({
   write: (chunk) => {
     self.postMessage(chunk.buffer, [chunk.buffer]);
+    // ws.send(chunk);
   },
 });
 

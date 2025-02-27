@@ -175,9 +175,6 @@ export class FlvMuxer {
         const tag = this.#muxChunk(chunk);
         controller.enqueue(tag);
       },
-      flush: () => {
-        this.#muxStream = undefined;
-      },
     });
   }
 
