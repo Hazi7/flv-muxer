@@ -2,99 +2,93 @@
 
 English | [中文](./README_CN.md)
 
-`flv-muxer.js` is a `flv` muxer written entirely in TypeScript, designed for native `flv` streaming/recording on the Web platform.
+`flv-muxer.js` is a pure TypeScript `FLV` multiplexer that enables native `FLV` streaming and recording on the Web platform.
 
-## Use Cases
+## Use Cases  
 
-- Use `WebTransport` or `WebSocket` to send `flv` streams to media servers for web live streaming.
-- Supports recording `flv` format when the `MediaRecorder` API doesn't support it.
+- Transmit `FLV` streams to a media server via `WebTransport` or `WebSocket` for web-based live streaming  
+- Overcome the limitation of the `MediaRecorder` API, which does not support `FLV` format recording  
 
-## Installation
+## Installation  
 
-To install via NPM, run the following command:
+### NPM  
 
-```shell
+```sh
 npm install flv-muxer
 ```
 
-To download via CDN link:
+### CDN  
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/flv-muxer@latest/dist/flv-muxer.iife.js"></script>
 ```
 
-## API
+## API  
 
-### `FlvMuxer`
+### `FlvMuxer`  
 
-`FlvMuxer` is a class used to create instances of the `flv` muxer. Below are its constructor and main methods:
+`FlvMuxer` is a class for creating an `FLV` multiplexer instance, providing stream processing capabilities.
 
-#### Constructor
+#### Constructor  
 
 ```ts
-new FlvMuxer(options: MuxerOptions)
+const muxer = new FlvMuxer(
+  writable: WritableStream,
+  options: {
+    mode: "record" | "live";
+    chunked: boolean; // Whether to transmit in chunks
+  }
+);
 ```
 
-The parameter `options` is an object containing the following properties:
+#### Methods  
 
-- `model`: Mode, which can be `"record"` (for recording) or `"live"` (for live streaming).
-  
-- `video`: Video-related configuration containing the following properties:
-  - `track`: A `MediaStreamTrack` type video track.
-  - `config`: A `VideoEncoderConfig` type video encoding configuration.
+- **`configureAudio()`**: Configures the audio encoder  
 
-- `audio`: Audio-related configuration containing the following properties:
-  - `track`: A `MediaStreamTrack` type audio track.
-  - `config`: An `AudioEncoderConfig` type audio encoding configuration.
+  ```ts
+  flvMuxer.configureAudio({
+    encoderConfig: AudioEncoderConfig;  
+  });
 
-- `chunked`: Whether to output `flv` data in chunks.
+  // Example
+  flvMuxer.configureAudio({
+    encoderConfig: {
+      codec: "mp4a.40.29",
+      sampleRate: 44100,
+      numberOfChannels: 2,
+    },
+  });
+  ```
 
-#### Methods
+  Audio encoder configuration: [AudioEncoderConfig](https://developer.mozilla.org/en-US/docs/Web/API/AudioEncoder/configure#config).  
 
-- `start()`: Starts the muxer to begin receiving and processing data.
-  
-- `stop()`: Stops the muxer to stop receiving and processing data.
+- **`configureVideo()`**: Configures the video encoder  
 
-- `pause()`: Pauses the muxer, temporarily halting the reception and processing of data.
+  ```ts
+  muxer.configureVideo({
+    encoderConfig: VideoEncoderConfig;  
+    keyframeInterval: number, // Keyframe interval in frames
+  });
 
-- `resume()`: Resumes the muxer, continuing to receive and process data.
-
-### Example Code
-
-Here is an example of how to use `FlvMuxer`:
-
-```ts
-const writable = new WritableStream({
-  write: (chunk) => {
-    // Use FLV stream
-    // recordingChunks.push(chunk);
-    // ws.send(chunk);
-  },
-});
-
-flvMuxer = new FlvMuxer(writable);
-
-await flvMuxer.configure({
-  video: {
-    track: videoTrack,
-    config: {
+  // Example
+  flvMuxer.configureVideo({
+    encoderConfig: {
       codec: "avc1.640034",
       width: 2560,
       height: 1440,
       framerate: 30,
-      latencyMode: "realtime",
     },
-  },
-  audio: {
-    track: audioTrack,
-    config: {
-      codec: "mp4a.40.29",
-      sampleRate: 44100,
-      numberOfChannels: 2,
-      bitrate: 128000,
-    },
-  },
-});
+    keyframeInterval: 90,
+  });
+  ```
 
-flvMuxer.start();
-```
+  video encoder configuration: [VideoEncoderConfig](https://developer.mozilla.org/en-US/docs/Web/API/VideoEncoder/configure#config).  
+
+- **`start()`**: Starts the multiplexer to receive and process data  
+- **`pause()`**: Pauses the multiplexer, temporarily stopping data processing  
+- **`resume()`**: Resumes the multiplexer, continuing data processing  
+- **`stop()`**: Stops the multiplexer, terminating data processing  
+
+#### Properties  
+
+- **`state`**: Returns the current state of the multiplexer. Possible values are `"recording"`, `"paused"`, or `"inactive"`.

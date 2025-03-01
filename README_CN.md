@@ -2,95 +2,94 @@
 
 [English](./README.md) | 中文
 
-`flv-muxer.js` 是一个纯 TS 编写的 `flv` 复用器，用于在 Web 平台实现原生 `flv` 推流/录屏。
+`flv-muxer.js` 是一个纯 TypeScript 编写的 `FLV` 复用器，可在 Web 平台实现原生 `FLV` 推流和录屏。
 
 ## 用例
 
-- 使用`Webtransport`、`Websocket` 将 `flv`流传输到流媒体服务器，实现 Web 直播。
-- 用于支持 `MediaRecorder` API 不支持 `flv` 格式录制。
+- 通过 `WebTransport`、`WebSocket` 传输 `FLV` 流到流媒体服务器，实现 Web 直播
+- 解决 `MediaRecorder` API 不支持 `FLV` 格式录制的问题
 
-## 使用
+## 安装
 
-### 安装
+### NPM
 
-从 NPM 安装，输入以下命令：
-
-```shell
-  npm install flv-muxer
+```sh
+npm install flv-muxer
 ```
 
-从 CDN 链接下载：
+### CDN
 
 ```html
-  <script src="https://cdn.jsdelivr.net/npm/flv-muxer@latest/dist/flv-muxer.iife.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flv-muxer@latest/dist/flv-muxer.iife.js"></script>
 ```
 
-### API
+## API
 
-#### `FlvMuxer`
+### `FlvMuxer`
 
-`FlvMuxer` 是一个类，用于创建 `flv` 复用器实例。以下是其构造函数和主要方法：
+`FlvMuxer` 是一个用于创建 `FLV` 复用器实例的类，提供流处理功能。
 
-- **构造函数**
-
-  ```ts
-  new FlvMuxer(options: MuxerOptions)
-  ```
-
-  参数 `options` 是一个对象，包含以下属性：
-
-  - `model`: 模式，可以是 `"record"`（录制）或 `"live"`（直播）。
-  - `video`: 视频相关配置，包含以下属性：
-    - `track`: `MediaStreamTrack` 类型的视频轨道。
-    - `config`: `VideoEncoderConfig` 类型的视频编码配置。
-  - `audio`: 音频相关配置，包含以下属性：
-    - `track`: `MediaStreamTrack` 类型的音频轨道。
-    - `config`: `AudioEncoderConfig` 类型的音频编码配置。
-  - `chunked`: 是否分块输出 `flv` 数据。
-
-- **方法**
-
-  - `start()`: 开始复用器，开始接收和处理数据。
-  - `stop()`: 停止复用器，停止接收和处理数据。
-  - `pause()`: 暂停复用器，暂停接收和处理数据。
-  - `resume()`: 恢复复用器，继续接收和处理数据。
-
-#### 示例代码
-
-以下是一个使用 `FlvMuxer` 的示例代码：
+#### 构造函数
 
 ```ts
-  const writable = new WritableStream({
-    write: (chunk) => {
-      // 使用 FLV 流
-      // recordingChunks.push(chunk);
-      // ws.send(chunk);
-    },
-  });
-
-  flvMuxer = new FlvMuxer(writable);
-
-  await flvMuxer.configure({
-    video: {
-      track: videoTrack,
-      config: {
-        codec: "avc1.640034",
-        width: 2560,
-        height: 1440,
-        framerate: 30,
-        latencyMode: "realtime",
-      },
-    },
-    audio: {
-      track: audioTrack,
-      config: {
-        codec: "mp4a.40.29",
-        sampleRate: 44100,
-        numberOfChannels: 2,
-        bitrate: 128000,
-      },
-    },
-  });
-
-  flvMuxer.start();
+const muxer = new FlvMuxer(
+  writable: WritableStream,
+  options: {
+    mode: "record" | "live";
+    chunked: boolean; // 是否分块传输
+  }
+)
 ```
+
+#### 方法
+
+- **`configureAudio()`**: 配置音频编码器
+
+  ```ts
+  flvMuxer.configureAudio({
+    encoderConfig: AudioEncoderConfig;  
+  });
+
+  // 示例
+  flvMuxer.configureAudio({
+    encoderConfig: {
+      codec: "mp4a.40.29",
+      sampleRate: 44100,
+      numberOfChannels: 2,
+    },
+  });
+  ```
+
+  音频编码器配置：[AudioEncoderConfig](https://developer.mozilla.org/en-US/docs/Web/API/AudioEncoder/configure#config)。
+
+- **`configureVideo()`**: 配置视频编码器
+
+  ```ts
+  muxer.configureVideo({
+    encoderConfig: VideoEncoderConfig;  
+    keyframeInterval: number, // 关键帧间隔，单位为帧数
+  });
+
+  // 示例
+  flvMuxer.configureVideo({
+    encoderConfig: {
+      codec: "avc1.640034",
+      width: 2560,
+      height: 1440,
+      framerate: 30,
+    },
+    keyframeInterval: 90,
+  });
+  ```
+
+  视频编码器配置: [VideoEncoderConfig](https://developer.mozilla.org/en-US/docs/Web/API/VideoEncoder/configure#config).  
+
+- **`start()`**: 开始复用器，接收并处理数据
+- **`pause()`**: 暂停复用器，暂时停止数据处理
+- **`resume()`**: 恢复复用器，继续处理数据
+- **`stop()`**: 停止复用器，终止数据处理
+
+#### 属性
+
+- **`state`**: 返回复用器状态。值为 `"recording"`、`"paused"` 或 `"inactive"`。
+
