@@ -100,8 +100,8 @@ export class StreamProcessor {
       return;
     }
 
+    // 如果是音频包
     if (chunk.type === "AAC_RAW") {
-      // 如果是音频包
       this.#processAudioChunk(chunk);
       return;
     }
@@ -121,7 +121,7 @@ export class StreamProcessor {
     this.state = "recording";
   }
 
-  async pause() {
+  async pause(): Promise<void> {
     if (this.state !== "recording") {
       return;
     }
@@ -153,27 +153,15 @@ export class StreamProcessor {
 
   reset(): void {
     this.#videoEncoderTrack?.reset();
+    this.#videoConfigReady = false;
+
     this.#audioEncoderTrack?.reset();
     this.#audioConfigReady = false;
-    this.#videoConfigReady = false;
   }
 
   async #flush(): Promise<void> {
     await this.#audioEncoderTrack?.flush();
     await this.#videoEncoderTrack?.flush();
-
-    const audioTrack = this.#audioEncoderTrack!;
-    const videoTrack = this.#videoEncoderTrack!;
-
-    // 清空音频轨道中的剩余数据
-    while (!audioTrack.isEmpty()) {
-      this.#publishChunk(audioTrack.dequeue());
-    }
-
-    // 清空视频轨道中的剩余数据
-    while (!videoTrack.isEmpty()) {
-      this.#publishChunk(videoTrack.dequeue());
-    }
   }
 
   #processAudioChunk(chunk: TrackChunk): void {

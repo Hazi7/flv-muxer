@@ -36,13 +36,13 @@ flvMuxer.configureVideo({
   keyframeInterval: 90,
 });
 
-flvMuxer.configureAudio({
-  encoderConfig: {
-    codec: "mp4a.40.29",
-    sampleRate: 44100,
-    numberOfChannels: 2,
-  },
-});
+// flvMuxer.configureAudio({
+//   encoderConfig: {
+//     codec: "mp4a.40.29",
+//     sampleRate: 44100,
+//     numberOfChannels: 2,
+//   },
+// });
 
 self.onmessage = async (e) => {
   if (e.data.type === "DATA_VIDEO") {

@@ -4,13 +4,12 @@ import type { MuxerMode } from "./flv-muxer";
 import { StreamProcessor, type TrackChunk } from "./stream-processor";
 
 type EncodedMediaChunk = EncodedAudioChunk | EncodedVideoChunk;
-
 type MediaDecoderConfig = AudioDecoderConfig | VideoDecoderConfig;
 
 class TrackState {
   static #instance: TrackState;
 
-  baseTimestamp: number = 0;
+  offsetTimestamp: number = 0;
 
   static getInstance() {
     if (!this.#instance) {
@@ -93,10 +92,6 @@ export abstract class BaseEncoderTrack {
     return this.queue[0];
   }
 
-  clear(): void {
-    this.queue = [];
-  }
-
   isEmpty(): boolean {
     return this.queue.length === 0;
   }
@@ -118,11 +113,10 @@ export abstract class BaseEncoderTrack {
   }
 
   reset(): void {
-    if (this.trackState.baseTimestamp !== 0) {
-      this.trackState.baseTimestamp = 0;
+    if (this.trackState.offsetTimestamp !== 0) {
+      this.trackState.offsetTimestamp = 0;
     }
 
-    this.clear();
     this._decoderConfig = undefined;
   }
 
@@ -135,11 +129,11 @@ export abstract class BaseEncoderTrack {
   }
 
   protected calculateTimestamp(timestamp: number) {
-    if (!this.trackState.baseTimestamp) {
-      this.trackState.baseTimestamp = timestamp;
+    if (!this.trackState.offsetTimestamp) {
+      this.trackState.offsetTimestamp = timestamp;
     }
 
-    return Math.max(0, (timestamp - this.trackState.baseTimestamp) / 1000);
+    return Math.max(0, (timestamp - this.trackState.offsetTimestamp) / 1000);
   }
 }
 
@@ -174,6 +168,17 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
     if (!this.encoder) {
       throw new Error("Encoder is not initialized.");
     }
+
+    // if (this.trackState.lastTimestamp === 0) {
+    //   this.trackState.lastTimestamp = frame.timestamp;
+    // }
+
+    // if (frame.timestamp - this.trackState.lastTimestamp > 500000) {
+    //   console.log(frame.timestamp, "frame");
+    //   console.log(this.trackState.lastTimestamp, "track");
+    //   frame.close();
+    //   return;
+    // }
 
     this.encoder.encode(frame as VideoFrame & AudioData, {
       keyFrame: this.#frameCount % this.#keyframeInterval === 0,
