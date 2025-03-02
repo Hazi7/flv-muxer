@@ -84,7 +84,7 @@ const muxer = new FlvMuxer(
 
   video encoder configuration: [VideoEncoderConfig](https://developer.mozilla.org/en-US/docs/Web/API/VideoEncoder/configure#config).  
 
-  - **`addRawChunk`**: Add raw frame data.
+- **`addRawChunk`**: Add raw frame data.
 
   ```ts
   flvMuxer.addRawChunk("video" ｜ "audio", chunk: VideoFrame | AudioData);
