@@ -84,6 +84,15 @@ const muxer = new FlvMuxer(
 
   视频编码器配置: [VideoEncoderConfig](https://developer.mozilla.org/en-US/docs/Web/API/VideoEncoder/configure#config).  
 
+  - **`addRawChunk`**: 添加原始帧数据。
+
+  ```ts
+  flvMuxer.addRawChunk("video" ｜ "audio", chunk: VideoFrame | AudioData);
+
+  // 示例
+  flvMuxer.addRawChunk("video", chunk);
+  ```
+
 - **`start()`**: 开始复用器，接收并处理数据
 - **`pause()`**: 暂停复用器，暂时停止数据处理
 - **`resume()`**: 恢复复用器，继续处理数据

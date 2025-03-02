@@ -84,6 +84,15 @@ const muxer = new FlvMuxer(
 
   video encoder configuration: [VideoEncoderConfig](https://developer.mozilla.org/en-US/docs/Web/API/VideoEncoder/configure#config).  
 
+  - **`addRawChunk`**: Add raw frame data.
+
+  ```ts
+  flvMuxer.addRawChunk("video" ｜ "audio", chunk: VideoFrame | AudioData);
+
+  // Example
+  flvMuxer.addRawChunk("video", chunk);
+  ```
+
 - **`start()`**: Starts the multiplexer to receive and process data  
 - **`pause()`**: Pauses the multiplexer, temporarily stopping data processing  
 - **`resume()`**: Resumes the multiplexer, continuing data processing  
