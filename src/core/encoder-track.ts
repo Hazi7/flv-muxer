@@ -169,17 +169,6 @@ export class VideoEncoderTrack extends BaseEncoderTrack {
       throw new Error("Encoder is not initialized.");
     }
 
-    // if (this.trackState.lastTimestamp === 0) {
-    //   this.trackState.lastTimestamp = frame.timestamp;
-    // }
-
-    // if (frame.timestamp - this.trackState.lastTimestamp > 500000) {
-    //   console.log(frame.timestamp, "frame");
-    //   console.log(this.trackState.lastTimestamp, "track");
-    //   frame.close();
-    //   return;
-    // }
-
     this.encoder.encode(frame as VideoFrame & AudioData, {
       keyFrame: this.#frameCount % this.#keyframeInterval === 0,
     });
